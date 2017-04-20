@@ -8,12 +8,6 @@ dependencies:
   pre:
     - ./scripts/setupNpm.sh
 
-test:
-  pre:
-    - mkdir -p $CIRCLE_TEST_REPORTS/mocha
-  post:
-    - mv coverage $CIRCLE_TEST_REPORTS
-
 deployment:
   feature:
     branch: master
