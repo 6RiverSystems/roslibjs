@@ -2,7 +2,7 @@
   "name": "@sixriver/roslib",
   "homepage": "https://www.robotwebtools.org",
   "description": "The standard ROS Javascript Library",
-  "version": "0.1.0",
+  "version": "0.20.0",
   "license": "BSD",
   "main": "./src/RosLibNode.js",
   "browser": {
