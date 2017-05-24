@@ -36,6 +36,36 @@ function Topic(options) {
   this.queue_size = options.queue_size || 100;
   this.queue_length = options.queue_length || 0;
 
+  var that = this;
+
+  // If the connection is closed, advertise/subscribe when we reconnect
+  this.ros.on('close', function() {
+      if (that.isAdvertised) {
+          that.advertiseId = 'advertise:' + that.name + ':' + (++that.ros.idCounter);
+          that.ros.callOnConnection({
+            op: 'advertise',
+            id: that.advertiseId,
+            type: that.messageType,
+            topic: that.name,
+            latch: that.latch,
+            queue_size: that.queue_size
+        });
+      }
+
+      if (that.subscribeId) {
+          that.subscribeId = 'subscribe:' + that.name + ':' + (++that.ros.idCounter);
+          that.ros.callOnConnection({
+              op: 'subscribe',
+              id: that.subscribeId,
+              type: that.messageType,
+              topic: that.name,
+              compression: that.compression,
+              throttle_rate: that.throttle_rate,
+              queue_length: that.queue_length
+          });
+      }
+  });
+
   // Check for valid compression types
   if (this.compression && this.compression !== 'png' &&
         this.compression !== 'none') {
@@ -49,7 +79,6 @@ function Topic(options) {
     this.throttle_rate = 0;
   }
 
-  var that = this;
   this._messageCallback = function(data) {
     that.emit('message', new Message(data));
   };
