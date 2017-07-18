@@ -2,7 +2,7 @@
   "name": "@sixriver/roslib",
   "homepage": "https://www.robotwebtools.org",
   "description": "The standard ROS Javascript Library",
-  "version": "0.20.1-reconnect-less",
+  "version": "0.20.1-5-foo.g3338912",
   "license": "BSD",
   "main": "./src/RosLibNode.js",
   "browser": {
