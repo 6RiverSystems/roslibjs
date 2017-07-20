@@ -9,11 +9,7 @@ dependencies:
     - ./scripts/setupNpm.sh
 
 deployment:
-  feature:
-    branch: master
+  all:
+    branch: /.*/
     commands:
-      - ./scripts/npmDeploy.sh
-  production:
-    branch: develop
-    commands:
-      - ./scripts/npmDeploy.sh beta
+      - ./scripts/release.sh
