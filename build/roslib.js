@@ -723,15 +723,8 @@
 }();
 
 },{}],2:[function(require,module,exports){
-/*
-object-assign
-(c) Sindre Sorhus
-@license MIT
-*/
-
 'use strict';
 /* eslint-disable no-unused-vars */
-var getOwnPropertySymbols = Object.getOwnPropertySymbols;
 var hasOwnProperty = Object.prototype.hasOwnProperty;
 var propIsEnumerable = Object.prototype.propertyIsEnumerable;
 
@@ -752,7 +745,7 @@ function shouldUseNative() {
 		// Detect buggy property enumeration order in older V8 versions.
 
 		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
-		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
+		var test1 = new String('abc');  // eslint-disable-line
 		test1[5] = 'de';
 		if (Object.getOwnPropertyNames(test1)[0] === '5') {
 			return false;
@@ -781,7 +774,7 @@ function shouldUseNative() {
 		}
 
 		return true;
-	} catch (err) {
+	} catch (e) {
 		// We don't expect any of the above to throw, but better to be safe.
 		return false;
 	}
@@ -801,8 +794,8 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 			}
 		}
 
-		if (getOwnPropertySymbols) {
-			symbols = getOwnPropertySymbols(from);
+		if (Object.getOwnPropertySymbols) {
+			symbols = Object.getOwnPropertySymbols(from);
 			for (var i = 0; i < symbols.length; i++) {
 				if (propIsEnumerable.call(from, symbols[i])) {
 					to[symbols[i]] = from[symbols[i]];
@@ -2421,6 +2414,48 @@ function Topic(options) {
   this.queue_size = options.queue_size || 100;
   this.queue_length = options.queue_length || 0;
 
+
+  var that = this;
+
+  this.ros.on('connection', function() {
+      that.wasRosConnected = true;
+  });
+
+  this.wasRosConnected = this.ros.isConnected;
+
+  // If the connection is closed, advertise/subscribe when we reconnect
+  this.ros.on('closed', function() {
+      if (that.wasRosConnected) {
+          if (that.isAdvertised) {
+              that.advertiseId = 'advertise:' + that.name + ':' + (++that.ros.idCounter);
+              that.ros.callOnConnection({
+                  op: 'advertise',
+                  id: that.advertiseId,
+                  type: that.messageType,
+                  topic: that.name,
+                  latch: that.latch,
+                  queue_size: that.queue_size
+              });
+          }
+
+          if (that.subscribeId) {
+              that.subscribeId = 'subscribe:' + that.name + ':' + (++that.ros.idCounter);
+              that.ros.callOnConnection({
+                  op: 'subscribe',
+                  id: that.subscribeId,
+                  type: that.messageType,
+                  topic: that.name,
+                  compression: that.compression,
+                  throttle_rate: that.throttle_rate,
+                  queue_length: that.queue_length
+              });
+          }
+      }
+      that.wasRosConnected = false;
+  });
+
+
+
   // Check for valid compression types
   if (this.compression && this.compression !== 'png' &&
         this.compression !== 'none') {
@@ -2434,7 +2469,6 @@ function Topic(options) {
     this.throttle_rate = 0;
   }
 
-  var that = this;
   this._messageCallback = function(data) {
     that.emit('message', new Message(data));
   };
