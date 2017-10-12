@@ -1,4 +1,5 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function (process){
 /*!
  * EventEmitter2
  * https://github.com/hij1nx/EventEmitter2
@@ -25,7 +26,8 @@
       this._conf = conf;
 
       conf.delimiter && (this.delimiter = conf.delimiter);
-      this._events.maxListeners = conf.maxListeners !== undefined ? conf.maxListeners : defaultMaxListeners;
+      this._maxListeners = conf.maxListeners !== undefined ? conf.maxListeners : defaultMaxListeners;
+
       conf.wildcard && (this.wildcard = conf.wildcard);
       conf.newListener && (this.newListener = conf.newListener);
       conf.verboseMemoryLeak && (this.verboseMemoryLeak = conf.verboseMemoryLeak);
@@ -34,24 +36,31 @@
         this.listenerTree = {};
       }
     } else {
-      this._events.maxListeners = defaultMaxListeners;
+      this._maxListeners = defaultMaxListeners;
     }
   }
 
   function logPossibleMemoryLeak(count, eventName) {
     var errorMsg = '(node) warning: possible EventEmitter memory ' +
-        'leak detected. %d listeners added. ' +
+        'leak detected. ' + count + ' listeners added. ' +
         'Use emitter.setMaxListeners() to increase limit.';
 
     if(this.verboseMemoryLeak){
-      errorMsg += ' Event name: %s.';
-      console.error(errorMsg, count, eventName);
-    } else {
-      console.error(errorMsg, count);
+      errorMsg += ' Event name: ' + eventName + '.';
     }
 
-    if (console.trace){
-      console.trace();
+    if(typeof process !== 'undefined' && process.emitWarning){
+      var e = new Error(errorMsg);
+      e.name = 'MaxListenersExceededWarning';
+      e.emitter = this;
+      e.count = count;
+      process.emitWarning(e);
+    } else {
+      console.error(errorMsg);
+
+      if (console.trace){
+        console.trace();
+      }
     }
   }
 
@@ -212,8 +221,8 @@
 
           if (
             !tree._listeners.warned &&
-            this._events.maxListeners > 0 &&
-            tree._listeners.length > this._events.maxListeners
+            this._maxListeners > 0 &&
+            tree._listeners.length > this._maxListeners
           ) {
             tree._listeners.warned = true;
             logPossibleMemoryLeak.call(this, tree._listeners.length, name);
@@ -237,8 +246,7 @@
 
   EventEmitter.prototype.setMaxListeners = function(n) {
     if (n !== undefined) {
-      this._events || init.call(this);
-      this._events.maxListeners = n;
+      this._maxListeners = n;
       if (!this._conf) this._conf = {};
       this._conf.maxListeners = n;
     }
@@ -246,12 +254,29 @@
 
   EventEmitter.prototype.event = '';
 
+
   EventEmitter.prototype.once = function(event, fn) {
-    this.many(event, 1, fn);
+    return this._once(event, fn, false);
+  };
+
+  EventEmitter.prototype.prependOnceListener = function(event, fn) {
+    return this._once(event, fn, true);
+  };
+
+  EventEmitter.prototype._once = function(event, fn, prepend) {
+    this._many(event, 1, fn, prepend);
     return this;
   };
 
   EventEmitter.prototype.many = function(event, ttl, fn) {
+    return this._many(event, ttl, fn, false);
+  }
+
+  EventEmitter.prototype.prependMany = function(event, ttl, fn) {
+    return this._many(event, ttl, fn, true);
+  }
+
+  EventEmitter.prototype._many = function(event, ttl, fn, prepend) {
     var self = this;
 
     if (typeof fn !== 'function') {
@@ -262,12 +287,12 @@
       if (--ttl === 0) {
         self.off(event, listener);
       }
-      fn.apply(this, arguments);
+      return fn.apply(this, arguments);
     }
 
     listener._origin = fn;
 
-    this.on(event, listener);
+    this._on(event, listener, prepend);
 
     return self;
   };
@@ -443,6 +468,7 @@
         promises.push(handler.apply(this, args));
       }
     } else if (handler && handler.length) {
+      handler = handler.slice();
       if (al > 3) {
         args = new Array(al - 1);
         for (j = 1; j < al; j++) args[j - 1] = arguments[j];
@@ -475,8 +501,45 @@
   };
 
   EventEmitter.prototype.on = function(type, listener) {
+    return this._on(type, listener, false);
+  };
+
+  EventEmitter.prototype.prependListener = function(type, listener) {
+    return this._on(type, listener, true);
+  };
+
+  EventEmitter.prototype.onAny = function(fn) {
+    return this._onAny(fn, false);
+  };
+
+  EventEmitter.prototype.prependAny = function(fn) {
+    return this._onAny(fn, true);
+  };
+
+  EventEmitter.prototype.addListener = EventEmitter.prototype.on;
+
+  EventEmitter.prototype._onAny = function(fn, prepend){
+    if (typeof fn !== 'function') {
+      throw new Error('onAny only accepts instances of Function');
+    }
+
+    if (!this._all) {
+      this._all = [];
+    }
+
+    // Add the function to the event listener collection.
+    if(prepend){
+      this._all.unshift(fn);
+    }else{
+      this._all.push(fn);
+    }
+
+    return this;
+  }
+
+  EventEmitter.prototype._on = function(type, listener, prepend) {
     if (typeof type === 'function') {
-      this.onAny(type);
+      this._onAny(type, listener);
       return this;
     }
 
@@ -504,14 +567,18 @@
         this._events[type] = [this._events[type]];
       }
 
-      // If we've already got an array, just append.
-      this._events[type].push(listener);
+      // If we've already got an array, just add
+      if(prepend){
+        this._events[type].unshift(listener);
+      }else{
+        this._events[type].push(listener);
+      }
 
       // Check for listener leak
       if (
         !this._events[type].warned &&
-        this._events.maxListeners > 0 &&
-        this._events[type].length > this._events.maxListeners
+        this._maxListeners > 0 &&
+        this._events[type].length > this._maxListeners
       ) {
         this._events[type].warned = true;
         logPossibleMemoryLeak.call(this, this._events[type].length, type);
@@ -519,23 +586,7 @@
     }
 
     return this;
-  };
-
-  EventEmitter.prototype.onAny = function(fn) {
-    if (typeof fn !== 'function') {
-      throw new Error('onAny only accepts instances of Function');
-    }
-
-    if (!this._all) {
-      this._all = [];
-    }
-
-    // Add the function to the event listener collection.
-    this._all.push(fn);
-    return this;
-  };
-
-  EventEmitter.prototype.addListener = EventEmitter.prototype.on;
+  }
 
   EventEmitter.prototype.off = function(type, listener) {
     if (typeof listener !== 'function') {
@@ -692,6 +743,10 @@
     return this._events[type];
   };
 
+  EventEmitter.prototype.eventNames = function(){
+    return Object.keys(this._events);
+  }
+
   EventEmitter.prototype.listenerCount = function(type) {
     return this.listeners(type).length;
   };
@@ -722,7 +777,8 @@
   }
 }();
 
-},{}],2:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"_process":3}],2:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -815,6 +871,192 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 };
 
 },{}],3:[function(require,module,exports){
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],4:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -844,11 +1086,11 @@ assign(ROSLIB, require('./urdf'));
 
 module.exports = ROSLIB;
 
-},{"./actionlib":9,"./core":18,"./math":23,"./tf":26,"./urdf":38,"object-assign":2}],4:[function(require,module,exports){
+},{"./actionlib":10,"./core":19,"./math":24,"./tf":27,"./urdf":39,"object-assign":2}],5:[function(require,module,exports){
 (function (global){
 global.ROSLIB = require('./RosLib');
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./RosLib":3}],5:[function(require,module,exports){
+},{"./RosLib":4}],6:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -982,7 +1224,7 @@ ActionClient.prototype.cancel = function() {
 
 module.exports = ActionClient;
 
-},{"../core/Message":10,"../core/Topic":17,"eventemitter2":1}],6:[function(require,module,exports){
+},{"../core/Message":11,"../core/Topic":18,"eventemitter2":1}],7:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Justin Young - justin@oodar.com.au
@@ -1071,7 +1313,7 @@ ActionListener.prototype.__proto__ = EventEmitter2.prototype;
 
 module.exports = ActionListener;
 
-},{"../core/Message":10,"../core/Topic":17,"eventemitter2":1}],7:[function(require,module,exports){
+},{"../core/Message":11,"../core/Topic":18,"eventemitter2":1}],8:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -1161,7 +1403,7 @@ Goal.prototype.cancel = function() {
 };
 
 module.exports = Goal;
-},{"../core/Message":10,"eventemitter2":1}],8:[function(require,module,exports){
+},{"../core/Message":11,"eventemitter2":1}],9:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Laura Lindzey - lindzey@gmail.com
@@ -1370,7 +1612,7 @@ SimpleActionServer.prototype.setPreempted = function() {
 };
 
 module.exports = SimpleActionServer;
-},{"../core/Message":10,"../core/Topic":17,"eventemitter2":1}],9:[function(require,module,exports){
+},{"../core/Message":11,"../core/Topic":18,"eventemitter2":1}],10:[function(require,module,exports){
 var Ros = require('../core/Ros');
 var mixin = require('../mixin');
 
@@ -1383,7 +1625,7 @@ var action = module.exports = {
 
 mixin(Ros, ['ActionClient', 'SimpleActionServer'], action);
 
-},{"../core/Ros":12,"../mixin":24,"./ActionClient":5,"./ActionListener":6,"./Goal":7,"./SimpleActionServer":8}],10:[function(require,module,exports){
+},{"../core/Ros":13,"../mixin":25,"./ActionClient":6,"./ActionListener":7,"./Goal":8,"./SimpleActionServer":9}],11:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -1402,7 +1644,7 @@ function Message(values) {
 }
 
 module.exports = Message;
-},{"object-assign":2}],11:[function(require,module,exports){
+},{"object-assign":2}],12:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -1486,7 +1728,7 @@ Param.prototype.delete = function(callback) {
 };
 
 module.exports = Param;
-},{"./Service":13,"./ServiceRequest":14}],12:[function(require,module,exports){
+},{"./Service":14,"./ServiceRequest":15}],13:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2107,7 +2349,7 @@ Ros.prototype.decodeTypeDefs = function(defs) {
 
 module.exports = Ros;
 
-},{"./Service":13,"./ServiceRequest":14,"./SocketAdapter.js":16,"eventemitter2":1,"object-assign":2,"ws":39}],13:[function(require,module,exports){
+},{"./Service":14,"./ServiceRequest":15,"./SocketAdapter.js":17,"eventemitter2":1,"object-assign":2,"ws":40}],14:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2225,7 +2467,7 @@ Service.prototype._serviceResponse = function(rosbridgeRequest) {
 };
 
 module.exports = Service;
-},{"./ServiceRequest":14,"./ServiceResponse":15,"eventemitter2":1}],14:[function(require,module,exports){
+},{"./ServiceRequest":15,"./ServiceResponse":16,"eventemitter2":1}],15:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - balexander@willowgarage.com
@@ -2244,7 +2486,7 @@ function ServiceRequest(values) {
 }
 
 module.exports = ServiceRequest;
-},{"object-assign":2}],15:[function(require,module,exports){
+},{"object-assign":2}],16:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - balexander@willowgarage.com
@@ -2263,7 +2505,7 @@ function ServiceResponse(values) {
 }
 
 module.exports = ServiceResponse;
-},{"object-assign":2}],16:[function(require,module,exports){
+},{"object-assign":2}],17:[function(require,module,exports){
 /**
  * Socket event handling utilities for handling events on either
  * WebSocket and TCP sockets
@@ -2382,7 +2624,7 @@ function SocketAdapter(client) {
 
 module.exports = SocketAdapter;
 
-},{"../util/decompressPng":41,"ws":39}],17:[function(require,module,exports){
+},{"../util/decompressPng":42,"ws":40}],18:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2421,6 +2663,48 @@ function Topic(options) {
   this.queue_size = options.queue_size || 100;
   this.queue_length = options.queue_length || 0;
 
+
+  var that = this;
+
+  this.ros.on('connection', function() {
+      that.wasRosConnected = true;
+  });
+
+  this.wasRosConnected = this.ros.isConnected;
+
+  // If the connection is closed, advertise/subscribe when we reconnect
+  this.ros.on('close', function() {
+      if (that.wasRosConnected) {
+          if (that.isAdvertised) {
+              that.advertiseId = 'advertise:' + that.name + ':' + (++that.ros.idCounter);
+              that.ros.callOnConnection({
+                  op: 'advertise',
+                  id: that.advertiseId,
+                  type: that.messageType,
+                  topic: that.name,
+                  latch: that.latch,
+                  queue_size: that.queue_size
+              });
+          }
+
+          if (that.subscribeId) {
+              that.subscribeId = 'subscribe:' + that.name + ':' + (++that.ros.idCounter);
+              that.ros.callOnConnection({
+                  op: 'subscribe',
+                  id: that.subscribeId,
+                  type: that.messageType,
+                  topic: that.name,
+                  compression: that.compression,
+                  throttle_rate: that.throttle_rate,
+                  queue_length: that.queue_length
+              });
+          }
+      }
+      that.wasRosConnected = false;
+  });
+
+
+
   // Check for valid compression types
   if (this.compression && this.compression !== 'png' &&
         this.compression !== 'none') {
@@ -2434,7 +2718,6 @@ function Topic(options) {
     this.throttle_rate = 0;
   }
 
-  var that = this;
   this._messageCallback = function(data) {
     that.emit('message', new Message(data));
   };
@@ -2552,7 +2835,7 @@ Topic.prototype.publish = function(message) {
 
 module.exports = Topic;
 
-},{"./Message":10,"eventemitter2":1}],18:[function(require,module,exports){
+},{"./Message":11,"eventemitter2":1}],19:[function(require,module,exports){
 var mixin = require('../mixin');
 
 var core = module.exports = {
@@ -2567,7 +2850,7 @@ var core = module.exports = {
 
 mixin(core.Ros, ['Param', 'Service', 'Topic'], core);
 
-},{"../mixin":24,"./Message":10,"./Param":11,"./Ros":12,"./Service":13,"./ServiceRequest":14,"./ServiceResponse":15,"./Topic":17}],19:[function(require,module,exports){
+},{"../mixin":25,"./Message":11,"./Param":12,"./Ros":13,"./Service":14,"./ServiceRequest":15,"./ServiceResponse":16,"./Topic":18}],20:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -2614,7 +2897,7 @@ Pose.prototype.clone = function() {
 };
 
 module.exports = Pose;
-},{"./Quaternion":20,"./Vector3":22}],20:[function(require,module,exports){
+},{"./Quaternion":21,"./Vector3":23}],21:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -2708,7 +2991,7 @@ Quaternion.prototype.clone = function() {
 
 module.exports = Quaternion;
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -2742,7 +3025,7 @@ Transform.prototype.clone = function() {
 };
 
 module.exports = Transform;
-},{"./Quaternion":20,"./Vector3":22}],22:[function(require,module,exports){
+},{"./Quaternion":21,"./Vector3":23}],23:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -2811,7 +3094,7 @@ Vector3.prototype.clone = function() {
 };
 
 module.exports = Vector3;
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 module.exports = {
     Pose: require('./Pose'),
     Quaternion: require('./Quaternion'),
@@ -2819,7 +3102,7 @@ module.exports = {
     Vector3: require('./Vector3')
 };
 
-},{"./Pose":19,"./Quaternion":20,"./Transform":21,"./Vector3":22}],24:[function(require,module,exports){
+},{"./Pose":20,"./Quaternion":21,"./Transform":22,"./Vector3":23}],25:[function(require,module,exports){
 /**
  * Mixin a feature to the core/Ros prototype.
  * For example, mixin(Ros, ['Topic'], {Topic: <Topic>})
@@ -2838,7 +3121,7 @@ module.exports = function(Ros, classes, features) {
     });
 };
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3049,7 +3332,7 @@ TFClient.prototype.unsubscribe = function(frameID, callback) {
 
 module.exports = TFClient;
 
-},{"../actionlib/ActionClient":5,"../actionlib/Goal":7,"../core/Service.js":13,"../core/ServiceRequest.js":14,"../math/Transform":21}],26:[function(require,module,exports){
+},{"../actionlib/ActionClient":6,"../actionlib/Goal":8,"../core/Service.js":14,"../core/ServiceRequest.js":15,"../math/Transform":22}],27:[function(require,module,exports){
 var Ros = require('../core/Ros');
 var mixin = require('../mixin');
 
@@ -3058,7 +3341,7 @@ var tf = module.exports = {
 };
 
 mixin(Ros, ['TFClient'], tf);
-},{"../core/Ros":12,"../mixin":24,"./TFClient":25}],27:[function(require,module,exports){
+},{"../core/Ros":13,"../mixin":25,"./TFClient":26}],28:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3089,7 +3372,7 @@ function UrdfBox(options) {
 }
 
 module.exports = UrdfBox;
-},{"../math/Vector3":22,"./UrdfTypes":36}],28:[function(require,module,exports){
+},{"../math/Vector3":23,"./UrdfTypes":37}],29:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3113,7 +3396,7 @@ function UrdfColor(options) {
 }
 
 module.exports = UrdfColor;
-},{}],29:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3136,7 +3419,7 @@ function UrdfCylinder(options) {
 }
 
 module.exports = UrdfCylinder;
-},{"./UrdfTypes":36}],30:[function(require,module,exports){
+},{"./UrdfTypes":37}],31:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author David V. Lu!!  davidvlu@gmail.com
@@ -3162,7 +3445,7 @@ function UrdfJoint(options) {
 
 module.exports = UrdfJoint;
 
-},{}],31:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3191,7 +3474,7 @@ function UrdfLink(options) {
 }
 
 module.exports = UrdfLink;
-},{"./UrdfVisual":37}],32:[function(require,module,exports){
+},{"./UrdfVisual":38}],33:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3241,7 +3524,7 @@ UrdfMaterial.prototype.assign = function(obj) {
 
 module.exports = UrdfMaterial;
 
-},{"./UrdfColor":28,"object-assign":2}],33:[function(require,module,exports){
+},{"./UrdfColor":29,"object-assign":2}],34:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3278,7 +3561,7 @@ function UrdfMesh(options) {
 }
 
 module.exports = UrdfMesh;
-},{"../math/Vector3":22,"./UrdfTypes":36}],34:[function(require,module,exports){
+},{"../math/Vector3":23,"./UrdfTypes":37}],35:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3375,7 +3658,7 @@ function UrdfModel(options) {
 
 module.exports = UrdfModel;
 
-},{"./UrdfJoint":30,"./UrdfLink":31,"./UrdfMaterial":32,"xmldom":42}],35:[function(require,module,exports){
+},{"./UrdfJoint":31,"./UrdfLink":32,"./UrdfMaterial":33,"xmldom":43}],36:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3397,7 +3680,7 @@ function UrdfSphere(options) {
 }
 
 module.exports = UrdfSphere;
-},{"./UrdfTypes":36}],36:[function(require,module,exports){
+},{"./UrdfTypes":37}],37:[function(require,module,exports){
 module.exports = {
 	URDF_SPHERE : 0,
 	URDF_BOX : 1,
@@ -3405,7 +3688,7 @@ module.exports = {
 	URDF_MESH : 3
 };
 
-},{}],37:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3534,7 +3817,7 @@ function UrdfVisual(options) {
 }
 
 module.exports = UrdfVisual;
-},{"../math/Pose":19,"../math/Quaternion":20,"../math/Vector3":22,"./UrdfBox":27,"./UrdfCylinder":29,"./UrdfMaterial":32,"./UrdfMesh":33,"./UrdfSphere":35}],38:[function(require,module,exports){
+},{"../math/Pose":20,"../math/Quaternion":21,"../math/Vector3":23,"./UrdfBox":28,"./UrdfCylinder":30,"./UrdfMaterial":33,"./UrdfMesh":34,"./UrdfSphere":36}],39:[function(require,module,exports){
 module.exports = require('object-assign')({
     UrdfBox: require('./UrdfBox'),
     UrdfColor: require('./UrdfColor'),
@@ -3547,16 +3830,16 @@ module.exports = require('object-assign')({
     UrdfVisual: require('./UrdfVisual')
 }, require('./UrdfTypes'));
 
-},{"./UrdfBox":27,"./UrdfColor":28,"./UrdfCylinder":29,"./UrdfLink":31,"./UrdfMaterial":32,"./UrdfMesh":33,"./UrdfModel":34,"./UrdfSphere":35,"./UrdfTypes":36,"./UrdfVisual":37,"object-assign":2}],39:[function(require,module,exports){
+},{"./UrdfBox":28,"./UrdfColor":29,"./UrdfCylinder":30,"./UrdfLink":32,"./UrdfMaterial":33,"./UrdfMesh":34,"./UrdfModel":35,"./UrdfSphere":36,"./UrdfTypes":37,"./UrdfVisual":38,"object-assign":2}],40:[function(require,module,exports){
 (function (global){
 module.exports = global.WebSocket;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],40:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 /* global document */
 module.exports = function Canvas() {
 	return document.createElement('canvas');
 };
-},{}],41:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 (function (global){
 /**
  * @fileOverview
@@ -3615,10 +3898,10 @@ function decompressPng(data, callback) {
 
 module.exports = decompressPng;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"canvas":40}],42:[function(require,module,exports){
+},{"canvas":41}],43:[function(require,module,exports){
 (function (global){
 exports.DOMImplementation = global.DOMImplementation;
 exports.XMLSerializer = global.XMLSerializer;
 exports.DOMParser = global.DOMParser;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}]},{},[4]);
+},{}]},{},[5]);
