@@ -2673,7 +2673,7 @@ function Topic(options) {
   this.wasRosConnected = this.ros.isConnected;
 
   // If the connection is closed, advertise/subscribe when we reconnect
-  this.ros.on('closed', function() {
+  this.ros.on('close', function() {
       if (that.wasRosConnected) {
           if (that.isAdvertised) {
               that.advertiseId = 'advertise:' + that.name + ':' + (++that.ros.idCounter);
