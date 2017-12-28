@@ -58,6 +58,18 @@ function Topic(options) {
                   latch: that.latch,
                   queue_size: that.queue_size
               });
+
+              if (that.lastPublishedMessage) {
+                  that.ros.idCounter++;
+
+                  that.ros.callOnConnection({
+                      op: 'publish',
+                      id: 'publish:' + that.name + ':' + that.ros.idCounter,
+                      topic: that.name,
+                      msg: that.lastPublishedMessage,
+                      latch: that.latch
+                  });
+              }
           }
 
           if (that.subscribeId) {
@@ -204,6 +216,10 @@ Topic.prototype.publish = function(message) {
     latch: this.latch
   };
   this.ros.callOnConnection(call);
+
+  if (this.latch) {
+      this.lastPublishedMessage = message;
+  }
 };
 
 module.exports = Topic;
