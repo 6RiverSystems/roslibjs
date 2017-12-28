@@ -50,7 +50,6 @@
   },
   "scripts": {
     "test": "grunt test",
-    "posttest": "nsp check",
     "test-examples": "grunt mochaTest:examples && karma start test/examples/karma.conf.js",
     "test-tcp": "grunt mochaTest:tcp",
     "publish": "grunt build"
