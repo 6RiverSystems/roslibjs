@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "chai": "*",
+    "coveralls": "3.0.0",
     "grunt": "^1.0.1",
     "grunt-browserify": "^5.0.0",
     "grunt-cli": "^1.2.0",
@@ -31,6 +32,7 @@
     "load-grunt-tasks": "^3.3.0",
     "mocha": "^4.0.1",
     "nsp": "^2.8.0",
+    "nyc": "^11.3.0",
     "time-grunt": "^1.0.0"
   },
   "dependencies": {
@@ -49,10 +51,12 @@
     "node": ">=0.10"
   },
   "scripts": {
-    "test": "grunt test",
+    "test": "nyc grunt test",
     "test-examples": "grunt mochaTest:examples && karma start test/examples/karma.conf.js",
     "test-tcp": "grunt mochaTest:tcp",
-    "publish": "grunt build"
+    "publish": "grunt build",
+    "test:debug": "npm run test:no-cover -- --debug-brk test",
+    "coverage": "NODE_ENV=test nyc report --reporter=text-lcov | coveralls"
   },
   "repository": {
     "type": "git",
