@@ -143,6 +143,7 @@ function SimpleActionServer(options) {
         that.statusMessage.header.stamp.nsecs = nsecs;
         statusPublisher.publish(that.statusMessage);
     }, 500); // publish every 500ms
+    statusInterval.unref(); // ensure the statusInterval doesn't prevent node from closing
 
 }
 
