@@ -3255,6 +3255,27 @@ function Topic(options) {
     this.throttle_rate = 0;
   }
 
+  if (this.reconnect_on_close) {
+    this.callForSubscribeAndAdvertise = function(message) {
+      that.ros.callOnConnection(message);
+
+      that.waitForReconnect = false;
+      that.reconnectFunc = function() {
+        if(!that.waitForReconnect) {
+          that.waitForReconnect = true;
+          that.ros.callOnConnection(message);
+          that.ros.once('connection', function() {
+            that.waitForReconnect = false;
+          });
+        }
+      };
+      that.ros.on('close', that.reconnectFunc);
+    };
+  }
+  else {
+    this.callForSubscribeAndAdvertise = this.ros.callOnConnection;
+  }
+
   this._messageCallback = function(data) {
     that.emit('message', new Message(data));
   };
