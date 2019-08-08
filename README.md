@@ -2,7 +2,7 @@ roslibjs [![Build Status](https://api.travis-ci.org/RobotWebTools/roslibjs.png)]
 ========
 
 #### The Standard ROS JavaScript Library
-For full documentation, see [the ROS wiki](http://ros.org/wiki/roslibjs) or check out some [working demos](http://robotwebtools.org/demos.html).
+For full documentation, see [the ROS wiki](http://wiki.ros.org/roslibjs) or check out some [working demos](http://robotwebtools.org/demos.html).
 
 [JSDoc](http://robotwebtools.org/jsdoc/roslibjs/current/) can be found on the Robot Web Tools website.
 
@@ -11,7 +11,7 @@ This project is released as part of the [Robot Web Tools](http://robotwebtools.o
 ### Usage
 Pre-built files can be found in either [roslib.js](build/roslib.js) or [roslib.min.js](build/roslib.min.js).
 
-Alternatively, you can use the current release via the Robot Web Tools CDN: ([full](http://cdn.robotwebtools.org/roslibjs/current/roslib.js)) | ([min](http://cdn.robotwebtools.org/roslibjs/current/roslib.min.js))
+Alternatively, you can use the current release via the Robot Web Tools CDN: ([full](https://static.robotwebtools.org/roslibjs/current/roslib.js)) | ([min](https://static.robotwebtools.org/roslibjs/current/roslib.min.js))
 
 ### Troubleshooting
 
@@ -31,7 +31,7 @@ Alternatively, you can use the current release via the Robot Web Tools CDN: ([fu
 
 roslibjs has a number of dependencies. You will need to run:
 
-`npm install` or `bower install`
+`npm install`
 
 Depending on your build environment.
 
