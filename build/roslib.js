@@ -1,4 +1,412 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2014 Patrick Gansterer <paroga@paroga.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+(function(global, undefined) { "use strict";
+var POW_2_24 = Math.pow(2, -24),
+    POW_2_32 = Math.pow(2, 32),
+    POW_2_53 = Math.pow(2, 53);
+
+function encode(value) {
+  var data = new ArrayBuffer(256);
+  var dataView = new DataView(data);
+  var lastLength;
+  var offset = 0;
+
+  function ensureSpace(length) {
+    var newByteLength = data.byteLength;
+    var requiredLength = offset + length;
+    while (newByteLength < requiredLength)
+      newByteLength *= 2;
+    if (newByteLength !== data.byteLength) {
+      var oldDataView = dataView;
+      data = new ArrayBuffer(newByteLength);
+      dataView = new DataView(data);
+      var uint32count = (offset + 3) >> 2;
+      for (var i = 0; i < uint32count; ++i)
+        dataView.setUint32(i * 4, oldDataView.getUint32(i * 4));
+    }
+
+    lastLength = length;
+    return dataView;
+  }
+  function write() {
+    offset += lastLength;
+  }
+  function writeFloat64(value) {
+    write(ensureSpace(8).setFloat64(offset, value));
+  }
+  function writeUint8(value) {
+    write(ensureSpace(1).setUint8(offset, value));
+  }
+  function writeUint8Array(value) {
+    var dataView = ensureSpace(value.length);
+    for (var i = 0; i < value.length; ++i)
+      dataView.setUint8(offset + i, value[i]);
+    write();
+  }
+  function writeUint16(value) {
+    write(ensureSpace(2).setUint16(offset, value));
+  }
+  function writeUint32(value) {
+    write(ensureSpace(4).setUint32(offset, value));
+  }
+  function writeUint64(value) {
+    var low = value % POW_2_32;
+    var high = (value - low) / POW_2_32;
+    var dataView = ensureSpace(8);
+    dataView.setUint32(offset, high);
+    dataView.setUint32(offset + 4, low);
+    write();
+  }
+  function writeTypeAndLength(type, length) {
+    if (length < 24) {
+      writeUint8(type << 5 | length);
+    } else if (length < 0x100) {
+      writeUint8(type << 5 | 24);
+      writeUint8(length);
+    } else if (length < 0x10000) {
+      writeUint8(type << 5 | 25);
+      writeUint16(length);
+    } else if (length < 0x100000000) {
+      writeUint8(type << 5 | 26);
+      writeUint32(length);
+    } else {
+      writeUint8(type << 5 | 27);
+      writeUint64(length);
+    }
+  }
+  
+  function encodeItem(value) {
+    var i;
+
+    if (value === false)
+      return writeUint8(0xf4);
+    if (value === true)
+      return writeUint8(0xf5);
+    if (value === null)
+      return writeUint8(0xf6);
+    if (value === undefined)
+      return writeUint8(0xf7);
+  
+    switch (typeof value) {
+      case "number":
+        if (Math.floor(value) === value) {
+          if (0 <= value && value <= POW_2_53)
+            return writeTypeAndLength(0, value);
+          if (-POW_2_53 <= value && value < 0)
+            return writeTypeAndLength(1, -(value + 1));
+        }
+        writeUint8(0xfb);
+        return writeFloat64(value);
+
+      case "string":
+        var utf8data = [];
+        for (i = 0; i < value.length; ++i) {
+          var charCode = value.charCodeAt(i);
+          if (charCode < 0x80) {
+            utf8data.push(charCode);
+          } else if (charCode < 0x800) {
+            utf8data.push(0xc0 | charCode >> 6);
+            utf8data.push(0x80 | charCode & 0x3f);
+          } else if (charCode < 0xd800) {
+            utf8data.push(0xe0 | charCode >> 12);
+            utf8data.push(0x80 | (charCode >> 6)  & 0x3f);
+            utf8data.push(0x80 | charCode & 0x3f);
+          } else {
+            charCode = (charCode & 0x3ff) << 10;
+            charCode |= value.charCodeAt(++i) & 0x3ff;
+            charCode += 0x10000;
+
+            utf8data.push(0xf0 | charCode >> 18);
+            utf8data.push(0x80 | (charCode >> 12)  & 0x3f);
+            utf8data.push(0x80 | (charCode >> 6)  & 0x3f);
+            utf8data.push(0x80 | charCode & 0x3f);
+          }
+        }
+
+        writeTypeAndLength(3, utf8data.length);
+        return writeUint8Array(utf8data);
+
+      default:
+        var length;
+        if (Array.isArray(value)) {
+          length = value.length;
+          writeTypeAndLength(4, length);
+          for (i = 0; i < length; ++i)
+            encodeItem(value[i]);
+        } else if (value instanceof Uint8Array) {
+          writeTypeAndLength(2, value.length);
+          writeUint8Array(value);
+        } else {
+          var keys = Object.keys(value);
+          length = keys.length;
+          writeTypeAndLength(5, length);
+          for (i = 0; i < length; ++i) {
+            var key = keys[i];
+            encodeItem(key);
+            encodeItem(value[key]);
+          }
+        }
+    }
+  }
+  
+  encodeItem(value);
+
+  if ("slice" in data)
+    return data.slice(0, offset);
+  
+  var ret = new ArrayBuffer(offset);
+  var retView = new DataView(ret);
+  for (var i = 0; i < offset; ++i)
+    retView.setUint8(i, dataView.getUint8(i));
+  return ret;
+}
+
+function decode(data, tagger, simpleValue) {
+  var dataView = new DataView(data);
+  var offset = 0;
+  
+  if (typeof tagger !== "function")
+    tagger = function(value) { return value; };
+  if (typeof simpleValue !== "function")
+    simpleValue = function() { return undefined; };
+
+  function read(value, length) {
+    offset += length;
+    return value;
+  }
+  function readArrayBuffer(length) {
+    return read(new Uint8Array(data, offset, length), length);
+  }
+  function readFloat16() {
+    var tempArrayBuffer = new ArrayBuffer(4);
+    var tempDataView = new DataView(tempArrayBuffer);
+    var value = readUint16();
+
+    var sign = value & 0x8000;
+    var exponent = value & 0x7c00;
+    var fraction = value & 0x03ff;
+    
+    if (exponent === 0x7c00)
+      exponent = 0xff << 10;
+    else if (exponent !== 0)
+      exponent += (127 - 15) << 10;
+    else if (fraction !== 0)
+      return fraction * POW_2_24;
+    
+    tempDataView.setUint32(0, sign << 16 | exponent << 13 | fraction << 13);
+    return tempDataView.getFloat32(0);
+  }
+  function readFloat32() {
+    return read(dataView.getFloat32(offset), 4);
+  }
+  function readFloat64() {
+    return read(dataView.getFloat64(offset), 8);
+  }
+  function readUint8() {
+    return read(dataView.getUint8(offset), 1);
+  }
+  function readUint16() {
+    return read(dataView.getUint16(offset), 2);
+  }
+  function readUint32() {
+    return read(dataView.getUint32(offset), 4);
+  }
+  function readUint64() {
+    return readUint32() * POW_2_32 + readUint32();
+  }
+  function readBreak() {
+    if (dataView.getUint8(offset) !== 0xff)
+      return false;
+    offset += 1;
+    return true;
+  }
+  function readLength(additionalInformation) {
+    if (additionalInformation < 24)
+      return additionalInformation;
+    if (additionalInformation === 24)
+      return readUint8();
+    if (additionalInformation === 25)
+      return readUint16();
+    if (additionalInformation === 26)
+      return readUint32();
+    if (additionalInformation === 27)
+      return readUint64();
+    if (additionalInformation === 31)
+      return -1;
+    throw "Invalid length encoding";
+  }
+  function readIndefiniteStringLength(majorType) {
+    var initialByte = readUint8();
+    if (initialByte === 0xff)
+      return -1;
+    var length = readLength(initialByte & 0x1f);
+    if (length < 0 || (initialByte >> 5) !== majorType)
+      throw "Invalid indefinite length element";
+    return length;
+  }
+
+  function appendUtf16data(utf16data, length) {
+    for (var i = 0; i < length; ++i) {
+      var value = readUint8();
+      if (value & 0x80) {
+        if (value < 0xe0) {
+          value = (value & 0x1f) <<  6
+                | (readUint8() & 0x3f);
+          length -= 1;
+        } else if (value < 0xf0) {
+          value = (value & 0x0f) << 12
+                | (readUint8() & 0x3f) << 6
+                | (readUint8() & 0x3f);
+          length -= 2;
+        } else {
+          value = (value & 0x0f) << 18
+                | (readUint8() & 0x3f) << 12
+                | (readUint8() & 0x3f) << 6
+                | (readUint8() & 0x3f);
+          length -= 3;
+        }
+      }
+
+      if (value < 0x10000) {
+        utf16data.push(value);
+      } else {
+        value -= 0x10000;
+        utf16data.push(0xd800 | (value >> 10));
+        utf16data.push(0xdc00 | (value & 0x3ff));
+      }
+    }
+  }
+
+  function decodeItem() {
+    var initialByte = readUint8();
+    var majorType = initialByte >> 5;
+    var additionalInformation = initialByte & 0x1f;
+    var i;
+    var length;
+
+    if (majorType === 7) {
+      switch (additionalInformation) {
+        case 25:
+          return readFloat16();
+        case 26:
+          return readFloat32();
+        case 27:
+          return readFloat64();
+      }
+    }
+
+    length = readLength(additionalInformation);
+    if (length < 0 && (majorType < 2 || 6 < majorType))
+      throw "Invalid length";
+
+    switch (majorType) {
+      case 0:
+        return length;
+      case 1:
+        return -1 - length;
+      case 2:
+        if (length < 0) {
+          var elements = [];
+          var fullArrayLength = 0;
+          while ((length = readIndefiniteStringLength(majorType)) >= 0) {
+            fullArrayLength += length;
+            elements.push(readArrayBuffer(length));
+          }
+          var fullArray = new Uint8Array(fullArrayLength);
+          var fullArrayOffset = 0;
+          for (i = 0; i < elements.length; ++i) {
+            fullArray.set(elements[i], fullArrayOffset);
+            fullArrayOffset += elements[i].length;
+          }
+          return fullArray;
+        }
+        return readArrayBuffer(length);
+      case 3:
+        var utf16data = [];
+        if (length < 0) {
+          while ((length = readIndefiniteStringLength(majorType)) >= 0)
+            appendUtf16data(utf16data, length);
+        } else
+          appendUtf16data(utf16data, length);
+        return String.fromCharCode.apply(null, utf16data);
+      case 4:
+        var retArray;
+        if (length < 0) {
+          retArray = [];
+          while (!readBreak())
+            retArray.push(decodeItem());
+        } else {
+          retArray = new Array(length);
+          for (i = 0; i < length; ++i)
+            retArray[i] = decodeItem();
+        }
+        return retArray;
+      case 5:
+        var retObject = {};
+        for (i = 0; i < length || length < 0 && !readBreak(); ++i) {
+          var key = decodeItem();
+          retObject[key] = decodeItem();
+        }
+        return retObject;
+      case 6:
+        return tagger(decodeItem(), length);
+      case 7:
+        switch (length) {
+          case 20:
+            return false;
+          case 21:
+            return true;
+          case 22:
+            return null;
+          case 23:
+            return undefined;
+          default:
+            return simpleValue(length);
+        }
+    }
+  }
+
+  var ret = decodeItem();
+  if (offset !== data.byteLength)
+    throw "Remaining bytes";
+  return ret;
+}
+
+var obj = { encode: encode, decode: decode };
+
+if (typeof define === "function" && define.amd)
+  define("cbor/cbor", obj);
+else if (typeof module !== 'undefined' && module.exports)
+  module.exports = obj;
+else if (!global.CBOR)
+  global.CBOR = obj;
+
+})(this);
+
+},{}],2:[function(require,module,exports){
 (function (process){
 /*!
  * EventEmitter2
@@ -778,7 +1186,7 @@
 }();
 
 }).call(this,require('_process'))
-},{"_process":3}],2:[function(require,module,exports){
+},{"_process":4}],3:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -870,7 +1278,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -1056,7 +1464,89 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
+var bundleFn = arguments[3];
+var sources = arguments[4];
+var cache = arguments[5];
+
+var stringify = JSON.stringify;
+
+module.exports = function (fn, options) {
+    var wkey;
+    var cacheKeys = Object.keys(cache);
+
+    for (var i = 0, l = cacheKeys.length; i < l; i++) {
+        var key = cacheKeys[i];
+        var exp = cache[key].exports;
+        // Using babel as a transpiler to use esmodule, the export will always
+        // be an object with the default export as a property of it. To ensure
+        // the existing api and babel esmodule exports are both supported we
+        // check for both
+        if (exp === fn || exp && exp.default === fn) {
+            wkey = key;
+            break;
+        }
+    }
+
+    if (!wkey) {
+        wkey = Math.floor(Math.pow(16, 8) * Math.random()).toString(16);
+        var wcache = {};
+        for (var i = 0, l = cacheKeys.length; i < l; i++) {
+            var key = cacheKeys[i];
+            wcache[key] = key;
+        }
+        sources[wkey] = [
+            'function(require,module,exports){' + fn + '(self); }',
+            wcache
+        ];
+    }
+    var skey = Math.floor(Math.pow(16, 8) * Math.random()).toString(16);
+
+    var scache = {}; scache[wkey] = wkey;
+    sources[skey] = [
+        'function(require,module,exports){' +
+            // try to call default if defined to also support babel esmodule exports
+            'var f = require(' + stringify(wkey) + ');' +
+            '(f.default ? f.default : f)(self);' +
+        '}',
+        scache
+    ];
+
+    var workerSources = {};
+    resolveSources(skey);
+
+    function resolveSources(key) {
+        workerSources[key] = true;
+
+        for (var depPath in sources[key][1]) {
+            var depKey = sources[key][1][depPath];
+            if (!workerSources[depKey]) {
+                resolveSources(depKey);
+            }
+        }
+    }
+
+    var src = '(' + bundleFn + ')({'
+        + Object.keys(workerSources).map(function (key) {
+            return stringify(key) + ':['
+                + sources[key][0]
+                + ',' + stringify(sources[key][1]) + ']'
+            ;
+        }).join(',')
+        + '},{},[' + stringify(skey) + '])'
+    ;
+
+    var URL = window.URL || window.webkitURL || window.mozURL || window.msURL;
+
+    var blob = new Blob([src], { type: 'text/javascript' });
+    if (options && options.bare) { return blob; }
+    var workerUrl = URL.createObjectURL(blob);
+    var worker = new Worker(workerUrl);
+    worker.objectURL = workerUrl;
+    return worker;
+};
+
+},{}],6:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -1068,7 +1558,7 @@ process.umask = function() { return 0; };
  * If you use nodejs, this is the variable you get when you require('roslib')
  */
 var ROSLIB = this.ROSLIB || {
-  REVISION : '0.19.0-SNAPSHOT'
+  REVISION : '1.0.1'
 };
 
 var assign = require('object-assign');
@@ -1086,11 +1576,11 @@ assign(ROSLIB, require('./urdf'));
 
 module.exports = ROSLIB;
 
-},{"./actionlib":10,"./core":19,"./math":24,"./tf":27,"./urdf":39,"object-assign":2}],5:[function(require,module,exports){
+},{"./actionlib":12,"./core":21,"./math":26,"./tf":29,"./urdf":41,"object-assign":3}],7:[function(require,module,exports){
 (function (global){
 global.ROSLIB = require('./RosLib');
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./RosLib":4}],6:[function(require,module,exports){
+},{"./RosLib":6}],8:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -1132,19 +1622,19 @@ function ActionClient(options) {
   var receivedStatus = false;
 
   // create the topics associated with actionlib
-  var feedbackListener = new Topic({
+  this.feedbackListener = new Topic({
     ros : this.ros,
     name : this.serverName + '/feedback',
     messageType : this.actionName + 'Feedback'
   });
 
-  var statusListener = new Topic({
+  this.statusListener = new Topic({
     ros : this.ros,
     name : this.serverName + '/status',
     messageType : 'actionlib_msgs/GoalStatusArray'
   });
 
-  var resultListener = new Topic({
+  this.resultListener = new Topic({
     ros : this.ros,
     name : this.serverName + '/result',
     messageType : this.actionName + 'Result'
@@ -1168,7 +1658,7 @@ function ActionClient(options) {
 
   // subscribe to the status topic
   if (!this.omitStatus) {
-    statusListener.subscribe(function(statusMessage) {
+    this.statusListener.subscribe(function(statusMessage) {
       receivedStatus = true;
       statusMessage.status_list.forEach(function(status) {
         var goal = that.goals[status.goal_id.id];
@@ -1181,7 +1671,7 @@ function ActionClient(options) {
 
   // subscribe the the feedback topic
   if (!this.omitFeedback) {
-    feedbackListener.subscribe(function(feedbackMessage) {
+    this.feedbackListener.subscribe(function(feedbackMessage) {
       var goal = that.goals[feedbackMessage.status.goal_id.id];
       if (goal) {
         goal.emit('status', feedbackMessage.status);
@@ -1192,7 +1682,7 @@ function ActionClient(options) {
 
   // subscribe to the result topic
   if (!this.omitResult) {
-    resultListener.subscribe(function(resultMessage) {
+    this.resultListener.subscribe(function(resultMessage) {
       var goal = that.goals[resultMessage.status.goal_id.id];
 
       if (goal) {
@@ -1222,9 +1712,20 @@ ActionClient.prototype.cancel = function() {
   this.cancelTopic.publish(cancelMessage);
 };
 
+/**
+ * Unsubscribe and unadvertise all topics associated with this ActionClient.
+ */
+ActionClient.prototype.dispose = function() {
+  this.goalTopic.unadvertise();
+  this.cancelTopic.unadvertise();
+  if (!this.omitStatus) {this.statusListener.unsubscribe();}
+  if (!this.omitFeedback) {this.feedbackListener.unsubscribe();}
+  if (!this.omitResult) {this.resultListener.unsubscribe();}
+};
+
 module.exports = ActionClient;
 
-},{"../core/Message":11,"../core/Topic":18,"eventemitter2":1}],7:[function(require,module,exports){
+},{"../core/Message":13,"../core/Topic":20,"eventemitter2":2}],9:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Justin Young - justin@oodar.com.au
@@ -1313,7 +1814,7 @@ ActionListener.prototype.__proto__ = EventEmitter2.prototype;
 
 module.exports = ActionListener;
 
-},{"../core/Message":11,"../core/Topic":18,"eventemitter2":1}],8:[function(require,module,exports){
+},{"../core/Message":13,"../core/Topic":20,"eventemitter2":2}],10:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -1403,7 +1904,7 @@ Goal.prototype.cancel = function() {
 };
 
 module.exports = Goal;
-},{"../core/Message":11,"eventemitter2":1}],9:[function(require,module,exports){
+},{"../core/Message":13,"eventemitter2":2}],11:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Laura Lindzey - lindzey@gmail.com
@@ -1549,6 +2050,7 @@ function SimpleActionServer(options) {
         that.statusMessage.header.stamp.nsecs = nsecs;
         statusPublisher.publish(that.statusMessage);
     }, 500); // publish every 500ms
+    statusInterval.unref(); // ensure the statusInterval doesn't prevent node from closing
 
 }
 
@@ -1612,7 +2114,7 @@ SimpleActionServer.prototype.setPreempted = function() {
 };
 
 module.exports = SimpleActionServer;
-},{"../core/Message":11,"../core/Topic":18,"eventemitter2":1}],10:[function(require,module,exports){
+},{"../core/Message":13,"../core/Topic":20,"eventemitter2":2}],12:[function(require,module,exports){
 var Ros = require('../core/Ros');
 var mixin = require('../mixin');
 
@@ -1625,7 +2127,7 @@ var action = module.exports = {
 
 mixin(Ros, ['ActionClient', 'SimpleActionServer'], action);
 
-},{"../core/Ros":13,"../mixin":25,"./ActionClient":6,"./ActionListener":7,"./Goal":8,"./SimpleActionServer":9}],11:[function(require,module,exports){
+},{"../core/Ros":15,"../mixin":27,"./ActionClient":8,"./ActionListener":9,"./Goal":10,"./SimpleActionServer":11}],13:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -1644,7 +2146,7 @@ function Message(values) {
 }
 
 module.exports = Message;
-},{"object-assign":2}],12:[function(require,module,exports){
+},{"object-assign":3}],14:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -1728,13 +2230,14 @@ Param.prototype.delete = function(callback) {
 };
 
 module.exports = Param;
-},{"./Service":14,"./ServiceRequest":15}],13:[function(require,module,exports){
+},{"./Service":16,"./ServiceRequest":17}],15:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
  */
 
 var WebSocket = require('ws');
+var WorkerSocket = require('../util/workerSocket');
 var socketAdapter = require('./SocketAdapter.js');
 
 var Service = require('./Service');
@@ -1757,7 +2260,7 @@ var EventEmitter2 = require('eventemitter2').EventEmitter2;
  * @param options - possible keys include: <br>
  *   * url (optional) - (can be specified later with `connect`) the WebSocket URL for rosbridge or the node server url to connect using socket.io (if socket.io exists in the page) <br>
  *   * groovyCompatibility - don't use interfaces that changed after the last groovy release or rosbridge_suite and related tools (defaults to true)
- *   * transportLibrary (optional) - one of 'websocket' (default), 'socket.io' or RTCPeerConnection instance controlling how the connection is created in `connect`.
+ *   * transportLibrary (optional) - one of 'websocket', 'workersocket' (default), 'socket.io' or RTCPeerConnection instance controlling how the connection is created in `connect`.
  *   * transportOptions (optional) - the options to use use when creating a connection. Currently only used if `transportLibrary` is RTCPeerConnection.
  */
 function Ros(options) {
@@ -1800,8 +2303,16 @@ Ros.prototype.connect = function(url) {
     this.socket.on('error', this.socket.onerror);
   } else if (this.transportLibrary.constructor.name === 'RTCPeerConnection') {
     this.socket = assign(this.transportLibrary.createDataChannel(url, this.transportOptions), socketAdapter(this));
-  }else {
-    this.socket = assign(new WebSocket(url), socketAdapter(this));
+  } else if (this.transportLibrary === 'websocket') {
+    if (!this.socket || this.socket.readyState === WebSocket.CLOSED) {
+      var sock = new WebSocket(url);
+      sock.binaryType = 'arraybuffer';
+      this.socket = assign(sock, socketAdapter(this));
+    }
+  } else if (this.transportLibrary === 'workersocket') {
+    this.socket = assign(new WorkerSocket(url), socketAdapter(this));
+  } else {
+    throw 'Unknown transportLibrary: ' + this.transportLibrary.toString();
   }
 
 };
@@ -2349,7 +2860,7 @@ Ros.prototype.decodeTypeDefs = function(defs) {
 
 module.exports = Ros;
 
-},{"./Service":14,"./ServiceRequest":15,"./SocketAdapter.js":17,"eventemitter2":1,"object-assign":2,"ws":40}],14:[function(require,module,exports){
+},{"../util/workerSocket":47,"./Service":16,"./ServiceRequest":17,"./SocketAdapter.js":19,"eventemitter2":2,"object-assign":3,"ws":43}],16:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2379,7 +2890,8 @@ function Service(options) {
 }
 Service.prototype.__proto__ = EventEmitter2.prototype;
 /**
- * Calls the service. Returns the service response in the callback.
+ * Calls the service. Returns the service response in the
+ * callback. Does nothing if this service is currently advertised.
  *
  * @param request - the ROSLIB.ServiceRequest to send
  * @param callback - function with params:
@@ -2410,17 +2922,22 @@ Service.prototype.callService = function(request, callback, failedCallback) {
     op : 'call_service',
     id : serviceCallId,
     service : this.name,
+    type: this.serviceType,
     args : request
   };
   this.ros.callOnConnection(call);
 };
 
 /**
- * Every time a message is published for the given topic, the callback
- * will be called with the message object.
+ * Advertise the service. This turns the Service object from a client
+ * into a server. The callback will be called with every request
+ * that's made on this service.
  *
- * @param callback - function with the following params:
- *   * message - the published message
+ * @param callback - This works similarly to the callback for a C++ service and should take the following params:
+ *   * request - the service request
+ *   * response - an empty dictionary. Take care not to overwrite this. Instead, only modify the values within.
+ *   It should return true if the service has finished successfully,
+ *   i.e. without any fatal errors.
  */
 Service.prototype.advertise = function(callback) {
   if (this.isAdvertised || typeof callback !== 'function') {
@@ -2467,7 +2984,8 @@ Service.prototype._serviceResponse = function(rosbridgeRequest) {
 };
 
 module.exports = Service;
-},{"./ServiceRequest":15,"./ServiceResponse":16,"eventemitter2":1}],15:[function(require,module,exports){
+
+},{"./ServiceRequest":17,"./ServiceResponse":18,"eventemitter2":2}],17:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - balexander@willowgarage.com
@@ -2486,7 +3004,7 @@ function ServiceRequest(values) {
 }
 
 module.exports = ServiceRequest;
-},{"object-assign":2}],16:[function(require,module,exports){
+},{"object-assign":3}],18:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - balexander@willowgarage.com
@@ -2505,7 +3023,7 @@ function ServiceResponse(values) {
 }
 
 module.exports = ServiceResponse;
-},{"object-assign":2}],17:[function(require,module,exports){
+},{"object-assign":3}],19:[function(require,module,exports){
 /**
  * Socket event handling utilities for handling events on either
  * WebSocket and TCP sockets
@@ -2517,7 +3035,8 @@ module.exports = ServiceResponse;
 'use strict';
 
 var decompressPng = require('../util/decompressPng');
-var WebSocket = require('ws');
+var CBOR = require('cbor-js');
+var typedArrayTagger = require('../util/cborTypedArrayTags');
 var BSON = null;
 if(typeof bson !== 'undefined'){
     BSON = bson().BSON;
@@ -2614,6 +3133,9 @@ function SocketAdapter(client) {
         decodeBSON(data.data, function (message) {
           handlePng(message, handleMessage);
         });
+      } else if (data.data instanceof ArrayBuffer) {
+        var decoded = CBOR.decode(data.data, typedArrayTagger);
+        handleMessage(decoded);
       } else {
         var message = JSON.parse(typeof data === 'string' ? data : data.data);
         handlePng(message, handleMessage);
@@ -2624,7 +3146,7 @@ function SocketAdapter(client) {
 
 module.exports = SocketAdapter;
 
-},{"../util/decompressPng":42,"ws":40}],18:[function(require,module,exports){
+},{"../util/cborTypedArrayTags":42,"../util/decompressPng":45,"cbor-js":1}],20:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2645,11 +3167,12 @@ var Message = require('./Message');
  *   * ros - the ROSLIB.Ros connection handle
  *   * name - the topic name, like /cmd_vel
  *   * messageType - the message type, like 'std_msgs/String'
- *   * compression - the type of compression to use, like 'png'
+ *   * compression - the type of compression to use, like 'png' or 'cbor'
  *   * throttle_rate - the rate (in ms in between messages) at which to throttle the topics
  *   * queue_size - the queue created at bridge side for re-publishing webtopics (defaults to 100)
  *   * latch - latch the topic when publishing
  *   * queue_length - the queue length at bridge side used when subscribing (defaults to 0, no queueing).
+ *   * reconnect_on_close - the flag to enable resubscription and readvertisement on close event(defaults to true).
  */
 function Topic(options) {
   options = options || {};
@@ -2662,6 +3185,7 @@ function Topic(options) {
   this.latch = options.latch || false;
   this.queue_size = options.queue_size || 100;
   this.queue_length = options.queue_length || 0;
+  this.reconnect_on_close = options.reconnect_on_close !== undefined ? options.reconnect_on_close : true;
 
 
   var that = this;
@@ -2719,15 +3243,37 @@ function Topic(options) {
 
   // Check for valid compression types
   if (this.compression && this.compression !== 'png' &&
-        this.compression !== 'none') {
+    this.compression !== 'cbor' && this.compression !== 'none') {
     this.emit('warning', this.compression +
       ' compression is not supported. No compression will be used.');
+    this.compression = 'none';
   }
 
   // Check if throttle rate is negative
   if (this.throttle_rate < 0) {
     this.emit('warning', this.throttle_rate + ' is not allowed. Set to 0');
     this.throttle_rate = 0;
+  }
+
+  if (this.reconnect_on_close) {
+    this.callForSubscribeAndAdvertise = function(message) {
+      that.ros.callOnConnection(message);
+
+      that.waitForReconnect = false;
+      that.reconnectFunc = function() {
+        if(!that.waitForReconnect) {
+          that.waitForReconnect = true;
+          that.ros.callOnConnection(message);
+          that.ros.once('connection', function() {
+            that.waitForReconnect = false;
+          });
+        }
+      };
+      that.ros.on('close', that.reconnectFunc);
+    };
+  }
+  else {
+    this.callForSubscribeAndAdvertise = this.ros.callOnConnection;
   }
 
   this._messageCallback = function(data) {
@@ -2751,7 +3297,8 @@ Topic.prototype.subscribe = function(callback) {
   if (this.subscribeId) { return; }
   this.ros.on(this.name, this._messageCallback);
   this.subscribeId = 'subscribe:' + this.name + ':' + (++this.ros.idCounter);
-  this.ros.callOnConnection({
+
+  this.callForSubscribeAndAdvertise({
     op: 'subscribe',
     id: this.subscribeId,
     type: this.messageType,
@@ -2780,6 +3327,9 @@ Topic.prototype.unsubscribe = function(callback) {
   if (!this.subscribeId) { return; }
   // Note: Don't call this.removeAllListeners, allow client to handle that themselves
   this.ros.off(this.name, this._messageCallback);
+  if(this.reconnect_on_close) {
+    this.ros.off('close', this.reconnectFunc);
+  }
   this.emit('unsubscribe');
   this.ros.callOnConnection({
     op: 'unsubscribe',
@@ -2789,6 +3339,7 @@ Topic.prototype.unsubscribe = function(callback) {
   this.subscribeId = null;
 };
 
+
 /**
  * Registers as a publisher for the topic.
  */
@@ -2797,7 +3348,7 @@ Topic.prototype.advertise = function() {
     return;
   }
   this.advertiseId = 'advertise:' + this.name + ':' + (++this.ros.idCounter);
-  this.ros.callOnConnection({
+  this.callForSubscribeAndAdvertise({
     op: 'advertise',
     id: this.advertiseId,
     type: this.messageType,
@@ -2806,6 +3357,13 @@ Topic.prototype.advertise = function() {
     queue_size: this.queue_size
   });
   this.isAdvertised = true;
+
+  if(!this.reconnect_on_close) {
+    var that = this;
+    this.ros.on('close', function() {
+      that.isAdvertised = false;
+    });
+  }
 };
 
 /**
@@ -2814,6 +3372,9 @@ Topic.prototype.advertise = function() {
 Topic.prototype.unadvertise = function() {
   if (!this.isAdvertised) {
     return;
+  }
+  if(this.reconnect_on_close) {
+    this.ros.off('close', this.reconnectFunc);
   }
   this.emit('unadvertise');
   this.ros.callOnConnection({
@@ -2851,7 +3412,7 @@ Topic.prototype.publish = function(message) {
 
 module.exports = Topic;
 
-},{"./Message":11,"eventemitter2":1}],19:[function(require,module,exports){
+},{"./Message":13,"eventemitter2":2}],21:[function(require,module,exports){
 var mixin = require('../mixin');
 
 var core = module.exports = {
@@ -2866,7 +3427,7 @@ var core = module.exports = {
 
 mixin(core.Ros, ['Param', 'Service', 'Topic'], core);
 
-},{"../mixin":25,"./Message":11,"./Param":12,"./Ros":13,"./Service":14,"./ServiceRequest":15,"./ServiceResponse":16,"./Topic":18}],20:[function(require,module,exports){
+},{"../mixin":27,"./Message":13,"./Param":14,"./Ros":15,"./Service":16,"./ServiceRequest":17,"./ServiceResponse":18,"./Topic":20}],22:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -2912,8 +3473,34 @@ Pose.prototype.clone = function() {
   return new Pose(this);
 };
 
+/**
+ * Multiplies this pose with another pose without altering this pose.
+ *
+ * @returns Result of multiplication.
+ */
+Pose.prototype.multiply = function(pose) {
+  var p = pose.clone();
+  p.applyTransform({ rotation: this.orientation, translation: this.position });
+  return p;
+};
+
+/**
+ * Computes the inverse of this pose.
+ *
+ * @returns Inverse of pose.
+ */
+Pose.prototype.getInverse = function() {
+  var inverse = this.clone();
+  inverse.orientation.invert();
+  inverse.position.multiplyQuaternion(inverse.orientation);
+  inverse.position.x *= -1;
+  inverse.position.y *= -1;
+  inverse.position.z *= -1;
+  return inverse;
+};
+
 module.exports = Pose;
-},{"./Quaternion":21,"./Vector3":23}],21:[function(require,module,exports){
+},{"./Quaternion":23,"./Vector3":25}],23:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3007,7 +3594,7 @@ Quaternion.prototype.clone = function() {
 
 module.exports = Quaternion;
 
-},{}],22:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3041,7 +3628,7 @@ Transform.prototype.clone = function() {
 };
 
 module.exports = Transform;
-},{"./Quaternion":21,"./Vector3":23}],23:[function(require,module,exports){
+},{"./Quaternion":23,"./Vector3":25}],25:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3110,7 +3697,7 @@ Vector3.prototype.clone = function() {
 };
 
 module.exports = Vector3;
-},{}],24:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 module.exports = {
     Pose: require('./Pose'),
     Quaternion: require('./Quaternion'),
@@ -3118,7 +3705,7 @@ module.exports = {
     Vector3: require('./Vector3')
 };
 
-},{"./Pose":20,"./Quaternion":21,"./Transform":22,"./Vector3":23}],25:[function(require,module,exports){
+},{"./Pose":22,"./Quaternion":23,"./Transform":24,"./Vector3":25}],27:[function(require,module,exports){
 /**
  * Mixin a feature to the core/Ros prototype.
  * For example, mixin(Ros, ['Topic'], {Topic: <Topic>})
@@ -3137,7 +3724,7 @@ module.exports = function(Ros, classes, features) {
     });
 };
 
-},{}],26:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3346,9 +3933,19 @@ TFClient.prototype.unsubscribe = function(frameID, callback) {
   }
 };
 
+/**
+ * Unsubscribe and unadvertise all topics associated with this TFClient.
+ */
+TFClient.prototype.dispose = function() {
+  this.actionClient.dispose();
+  if (this.currentTopic) {
+    this.currentTopic.unsubscribe();
+  }
+};
+
 module.exports = TFClient;
 
-},{"../actionlib/ActionClient":6,"../actionlib/Goal":8,"../core/Service.js":14,"../core/ServiceRequest.js":15,"../math/Transform":22}],27:[function(require,module,exports){
+},{"../actionlib/ActionClient":8,"../actionlib/Goal":10,"../core/Service.js":16,"../core/ServiceRequest.js":17,"../math/Transform":24}],29:[function(require,module,exports){
 var Ros = require('../core/Ros');
 var mixin = require('../mixin');
 
@@ -3357,7 +3954,7 @@ var tf = module.exports = {
 };
 
 mixin(Ros, ['TFClient'], tf);
-},{"../core/Ros":13,"../mixin":25,"./TFClient":26}],28:[function(require,module,exports){
+},{"../core/Ros":15,"../mixin":27,"./TFClient":28}],30:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3388,7 +3985,7 @@ function UrdfBox(options) {
 }
 
 module.exports = UrdfBox;
-},{"../math/Vector3":23,"./UrdfTypes":37}],29:[function(require,module,exports){
+},{"../math/Vector3":25,"./UrdfTypes":39}],31:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3412,7 +4009,7 @@ function UrdfColor(options) {
 }
 
 module.exports = UrdfColor;
-},{}],30:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3435,11 +4032,15 @@ function UrdfCylinder(options) {
 }
 
 module.exports = UrdfCylinder;
-},{"./UrdfTypes":37}],31:[function(require,module,exports){
+},{"./UrdfTypes":39}],33:[function(require,module,exports){
 /**
- * @fileOverview 
+ * @fileOverview
  * @author David V. Lu!!  davidvlu@gmail.com
  */
+
+var Pose = require('../math/Pose');
+var Vector3 = require('../math/Vector3');
+var Quaternion = require('../math/Quaternion');
 
 /**
  * A Joint element in a URDF.
@@ -3451,17 +4052,80 @@ module.exports = UrdfCylinder;
 function UrdfJoint(options) {
   this.name = options.xml.getAttribute('name');
   this.type = options.xml.getAttribute('type');
-  
+
+  var parents = options.xml.getElementsByTagName('parent');
+  if(parents.length > 0) {
+    this.parent = parents[0].getAttribute('link');
+  }
+
+  var children = options.xml.getElementsByTagName('child');
+  if(children.length > 0) {
+    this.child = children[0].getAttribute('link');
+  }
+
   var limits = options.xml.getElementsByTagName('limit');
   if (limits.length > 0) {
     this.minval = parseFloat( limits[0].getAttribute('lower') );
     this.maxval = parseFloat( limits[0].getAttribute('upper') );
   }
+
+  // Origin
+  var origins = options.xml.getElementsByTagName('origin');
+  if (origins.length === 0) {
+    // use the identity as the default
+    this.origin = new Pose();
+  } else {
+    // Check the XYZ
+    var xyz = origins[0].getAttribute('xyz');
+    var position = new Vector3();
+    if (xyz) {
+      xyz = xyz.split(' ');
+      position = new Vector3({
+        x : parseFloat(xyz[0]),
+        y : parseFloat(xyz[1]),
+        z : parseFloat(xyz[2])
+      });
+    }
+
+    // Check the RPY
+    var rpy = origins[0].getAttribute('rpy');
+    var orientation = new Quaternion();
+    if (rpy) {
+      rpy = rpy.split(' ');
+      // Convert from RPY
+      var roll = parseFloat(rpy[0]);
+      var pitch = parseFloat(rpy[1]);
+      var yaw = parseFloat(rpy[2]);
+      var phi = roll / 2.0;
+      var the = pitch / 2.0;
+      var psi = yaw / 2.0;
+      var x = Math.sin(phi) * Math.cos(the) * Math.cos(psi) - Math.cos(phi) * Math.sin(the)
+          * Math.sin(psi);
+      var y = Math.cos(phi) * Math.sin(the) * Math.cos(psi) + Math.sin(phi) * Math.cos(the)
+          * Math.sin(psi);
+      var z = Math.cos(phi) * Math.cos(the) * Math.sin(psi) - Math.sin(phi) * Math.sin(the)
+          * Math.cos(psi);
+      var w = Math.cos(phi) * Math.cos(the) * Math.cos(psi) + Math.sin(phi) * Math.sin(the)
+          * Math.sin(psi);
+
+      orientation = new Quaternion({
+        x : x,
+        y : y,
+        z : z,
+        w : w
+      });
+      orientation.normalize();
+    }
+    this.origin = new Pose({
+      position : position,
+      orientation : orientation
+    });
+  }
 }
 
 module.exports = UrdfJoint;
 
-},{}],32:[function(require,module,exports){
+},{"../math/Pose":22,"../math/Quaternion":23,"../math/Vector3":25}],34:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3490,7 +4154,7 @@ function UrdfLink(options) {
 }
 
 module.exports = UrdfLink;
-},{"./UrdfVisual":38}],33:[function(require,module,exports){
+},{"./UrdfVisual":40}],35:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3540,7 +4204,7 @@ UrdfMaterial.prototype.assign = function(obj) {
 
 module.exports = UrdfMaterial;
 
-},{"./UrdfColor":29,"object-assign":2}],34:[function(require,module,exports){
+},{"./UrdfColor":31,"object-assign":3}],36:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3577,7 +4241,7 @@ function UrdfMesh(options) {
 }
 
 module.exports = UrdfMesh;
-},{"../math/Vector3":23,"./UrdfTypes":37}],35:[function(require,module,exports){
+},{"../math/Vector3":25,"./UrdfTypes":39}],37:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3674,7 +4338,7 @@ function UrdfModel(options) {
 
 module.exports = UrdfModel;
 
-},{"./UrdfJoint":31,"./UrdfLink":32,"./UrdfMaterial":33,"xmldom":43}],36:[function(require,module,exports){
+},{"./UrdfJoint":33,"./UrdfLink":34,"./UrdfMaterial":35,"xmldom":46}],38:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3696,7 +4360,7 @@ function UrdfSphere(options) {
 }
 
 module.exports = UrdfSphere;
-},{"./UrdfTypes":37}],37:[function(require,module,exports){
+},{"./UrdfTypes":39}],39:[function(require,module,exports){
 module.exports = {
 	URDF_SPHERE : 0,
 	URDF_BOX : 1,
@@ -3704,7 +4368,7 @@ module.exports = {
 	URDF_MESH : 3
 };
 
-},{}],38:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3833,7 +4497,7 @@ function UrdfVisual(options) {
 }
 
 module.exports = UrdfVisual;
-},{"../math/Pose":20,"../math/Quaternion":21,"../math/Vector3":23,"./UrdfBox":28,"./UrdfCylinder":30,"./UrdfMaterial":33,"./UrdfMesh":34,"./UrdfSphere":36}],39:[function(require,module,exports){
+},{"../math/Pose":22,"../math/Quaternion":23,"../math/Vector3":25,"./UrdfBox":30,"./UrdfCylinder":32,"./UrdfMaterial":35,"./UrdfMesh":36,"./UrdfSphere":38}],41:[function(require,module,exports){
 module.exports = require('object-assign')({
     UrdfBox: require('./UrdfBox'),
     UrdfColor: require('./UrdfColor'),
@@ -3846,17 +4510,135 @@ module.exports = require('object-assign')({
     UrdfVisual: require('./UrdfVisual')
 }, require('./UrdfTypes'));
 
-},{"./UrdfBox":28,"./UrdfColor":29,"./UrdfCylinder":30,"./UrdfLink":32,"./UrdfMaterial":33,"./UrdfMesh":34,"./UrdfModel":35,"./UrdfSphere":36,"./UrdfTypes":37,"./UrdfVisual":38,"object-assign":2}],40:[function(require,module,exports){
-(function (global){
-module.exports = global.WebSocket;
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],41:[function(require,module,exports){
+},{"./UrdfBox":30,"./UrdfColor":31,"./UrdfCylinder":32,"./UrdfLink":34,"./UrdfMaterial":35,"./UrdfMesh":36,"./UrdfModel":37,"./UrdfSphere":38,"./UrdfTypes":39,"./UrdfVisual":40,"object-assign":3}],42:[function(require,module,exports){
+'use strict';
+
+var UPPER32 = Math.pow(2, 32);
+
+var warnedPrecision = false;
+function warnPrecision() {
+  if (!warnedPrecision) {
+    warnedPrecision = true;
+    console.warn('CBOR 64-bit integer array values may lose precision. No further warnings.');
+  }
+}
+
+/**
+ * Unpacks 64-bit unsigned integer from byte array.
+ * @param {Uint8Array} bytes
+*/
+function decodeUint64LE(bytes) {
+  warnPrecision();
+
+  var byteLen = bytes.byteLength;
+  var offset = bytes.byteOffset;
+  var arrLen = byteLen / 8;
+
+  var buffer = bytes.buffer.slice(offset, offset + byteLen);
+  var uint32View = new Uint32Array(buffer);
+
+  var arr = new Array(arrLen);
+  for (var i = 0; i < arrLen; i++) {
+    var si = i * 2;
+    var lo = uint32View[si];
+    var hi = uint32View[si+1];
+    arr[i] = lo + UPPER32 * hi;
+  }
+
+  return arr;
+}
+
+/**
+ * Unpacks 64-bit signed integer from byte array.
+ * @param {Uint8Array} bytes
+*/
+function decodeInt64LE(bytes) {
+  warnPrecision();
+
+  var byteLen = bytes.byteLength;
+  var offset = bytes.byteOffset;
+  var arrLen = byteLen / 8;
+
+  var buffer = bytes.buffer.slice(offset, offset + byteLen);
+  var uint32View = new Uint32Array(buffer);
+  var int32View = new Int32Array(buffer);
+
+  var arr = new Array(arrLen);
+  for (var i = 0; i < arrLen; i++) {
+    var si = i * 2;
+    var lo = uint32View[si];
+    var hi = int32View[si+1];
+    arr[i] = lo + UPPER32 * hi;
+  }
+
+  return arr;
+}
+
+/**
+ * Unpacks typed array from byte array.
+ * @param {Uint8Array} bytes
+ * @param {type} ArrayType - desired output array type
+*/
+function decodeNativeArray(bytes, ArrayType) {
+  var byteLen = bytes.byteLength;
+  var offset = bytes.byteOffset;
+  var buffer = bytes.buffer.slice(offset, offset + byteLen);
+  return new ArrayType(buffer);
+}
+
+/**
+ * Support a subset of draft CBOR typed array tags:
+ *   <https://tools.ietf.org/html/draft-ietf-cbor-array-tags-00>
+ * Only support little-endian tags for now.
+ */
+var nativeArrayTypes = {
+  64: Uint8Array,
+  69: Uint16Array,
+  70: Uint32Array,
+  72: Int8Array,
+  77: Int16Array,
+  78: Int32Array,
+  85: Float32Array,
+  86: Float64Array
+};
+
+/**
+ * We can also decode 64-bit integer arrays, since ROS has these types.
+ */
+var conversionArrayTypes = {
+  71: decodeUint64LE,
+  79: decodeInt64LE
+};
+
+/**
+ * Handles CBOR typed array tags during decoding.
+ * @param {Uint8Array} data
+ * @param {Number} tag
+ */
+function cborTypedArrayTagger(data, tag) {
+  if (tag in nativeArrayTypes) {
+    var arrayType = nativeArrayTypes[tag];
+    return decodeNativeArray(data, arrayType);
+  }
+  if (tag in conversionArrayTypes) {
+    return conversionArrayTypes[tag](data);
+  }
+  return data;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = cborTypedArrayTagger;
+}
+
+},{}],43:[function(require,module,exports){
+module.exports = typeof window !== 'undefined' ? window.WebSocket : WebSocket;
+
+},{}],44:[function(require,module,exports){
 /* global document */
 module.exports = function Canvas() {
 	return document.createElement('canvas');
 };
-},{}],42:[function(require,module,exports){
-(function (global){
+},{}],45:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Graeme Yeates - github.com/megawac
@@ -3865,7 +4647,7 @@ module.exports = function Canvas() {
 'use strict';
 
 var Canvas = require('canvas');
-var Image = Canvas.Image || global.Image;
+var Image = Canvas.Image || window.Image;
 
 /**
  * If a message was compressed as a PNG image (a compression hack since
@@ -3913,11 +4695,106 @@ function decompressPng(data, callback) {
 }
 
 module.exports = decompressPng;
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"canvas":41}],43:[function(require,module,exports){
-(function (global){
-exports.DOMImplementation = global.DOMImplementation;
-exports.XMLSerializer = global.XMLSerializer;
-exports.DOMParser = global.DOMParser;
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}]},{},[5]);
+
+},{"canvas":44}],46:[function(require,module,exports){
+exports.DOMImplementation = window.DOMImplementation;
+exports.XMLSerializer = window.XMLSerializer;
+exports.DOMParser = window.DOMParser;
+
+},{}],47:[function(require,module,exports){
+var work = require('webworkify');
+var workerSocketImpl = require('./workerSocketImpl');
+
+function WorkerSocket(uri) {
+  this.socket_ = work(workerSocketImpl);
+
+  this.socket_.addEventListener('message', this.handleWorkerMessage_.bind(this));
+
+  this.socket_.postMessage({
+    uri: uri,
+  });
+}
+
+WorkerSocket.prototype.handleWorkerMessage_ = function(ev) {
+  var data = ev.data;
+  if (data instanceof ArrayBuffer || typeof data === 'string') {
+    // binary or JSON message from rosbridge
+    this.onmessage(ev);
+  } else {
+    // control message from the wrapped WebSocket
+    var type = data.type;
+    if (type === 'close') {
+      this.onclose(null);
+    } else if (type === 'open') {
+      this.onopen(null);
+    } else if (type === 'error') {
+      this.onerror(null);
+    } else {
+      throw 'Unknown message from workersocket';
+    }
+  }
+};
+
+WorkerSocket.prototype.send = function(data) {
+  this.socket_.postMessage(data);
+};
+
+WorkerSocket.prototype.close = function() {
+  this.socket_.postMessage({
+    close: true
+  });
+};
+
+module.exports = WorkerSocket;
+
+},{"./workerSocketImpl":48,"webworkify":5}],48:[function(require,module,exports){
+var WebSocket = WebSocket || require('ws');
+
+module.exports = function(self) {
+  var socket = null;
+
+  function handleSocketMessage(ev) {
+    var data = ev.data;
+
+    if (data instanceof ArrayBuffer) {
+      // binary message, transfer for speed
+      self.postMessage(data, [data]);
+    } else {
+      // JSON message, copy string
+      self.postMessage(data);
+    }
+  }
+
+  function handleSocketControl(ev) {
+    self.postMessage({type: ev.type});
+  }
+
+  self.addEventListener('message', function(ev) {
+    var data = ev.data;
+
+    if (typeof data === 'string') {
+      // JSON message from ROSLIB
+      socket.send(data);
+    } else {
+      // control message
+      if (data.hasOwnProperty('close')) {
+        socket.close();
+        socket = null;
+      } else if (data.hasOwnProperty('uri')) {
+        var uri = data.uri;
+
+        socket = new WebSocket(uri);
+        socket.binaryType = 'arraybuffer';
+
+        socket.onmessage = handleSocketMessage;
+        socket.onclose = handleSocketControl;
+        socket.onopen = handleSocketControl;
+        socket.onerror = handleSocketControl;
+      } else {
+        throw 'Unknown message to WorkerSocket';
+      }
+    }
+  });
+};
+
+},{"ws":43}]},{},[7]);
