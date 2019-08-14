@@ -25,7 +25,7 @@
     "grunt-jsdoc": "^2.1.0",
     "grunt-karma": "^2.0.0",
     "grunt-mocha-test": "^0.13.3",
-    "karma": "^1.7.1",
+    "karma": "^3.1.4",
     "karma-chai": "^0.1.0",
     "karma-firefox-launcher": "^1.0.0",
     "karma-mocha": "^1.1.1",
@@ -39,9 +39,11 @@
     "eventemitter2": "~4.1.2",
     "object-assign": "^4.0.1",
     "pngparse": "^2.0.1",
-    "ws": "^3.2.0",
+    "ws": "^3.3.1",
     "xmldom": "^0.1.19",
-    "socket.io": "^2.0.3"
+    "cbor-js": "^0.1.0",
+    "webworkify": "^1.5.0",
+    "socket.io": "2.2.0"
   },
   "directories": {
     "example": "examples",
@@ -52,7 +54,8 @@
   },
   "scripts": {
     "test": "nyc grunt test",
-    "test-examples": "grunt mochaTest:examples && karma start test/examples/karma.conf.js",
+    "test-examples": "grunt mochaTest:examples && xvfb-run -a karma start test/examples/karma.conf.js",
+    "test-workersocket": "grunt uglify && xvfb-run -a karma start test/workersocket/karma.conf.js",
     "test-tcp": "grunt mochaTest:tcp",
     "publish": "grunt build",
     "test:debug": "npm run test:no-cover -- --debug-brk test",

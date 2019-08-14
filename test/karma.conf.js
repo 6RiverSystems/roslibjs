@@ -12,6 +12,8 @@ module.exports = function(config) {
     // List of files / patterns to load in the browser
     files: [
       '../node_modules/eventemitter2/lib/eventemitter2.js',
+      '../node_modules/cbor-js/cbor.js',
+      '../src/util/cborTypedArrayTags.js',
       '../build/roslib.js',
       './require-shim.js',
       '*.test.js'
@@ -41,8 +43,8 @@ module.exports = function(config) {
 
 
     // level of logging
-    // possible values: LOG_DISABLE || LOG_ERROR || LOG_WARN || LOG_INFO || LOG_DEBUG
-    logLevel: 'LOG_INFO',
+    // possible values: ALL, TRACE, DEBUG, INFO, WARN, ERROR, FATAL, MARK, OFF
+    logLevel: 'INFO',
 
 
     // enable / disable watching file and executing tests whenever any file changes
