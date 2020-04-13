@@ -25,7 +25,11 @@ function RosTCP(options) {
       port: options.port
     });
   }
-  if(options.http || options.socketio){
+
+  if(!this.socket && options.socket){
+    options.socket.binaryType = 'arraybuffer';
+    this.socket = Object.assign(options.socket, socketAdapter(this));
+  } else if(options.http || options.socketio){
     this.io = new SocketIO(options, this);
   }
 }
