@@ -27,8 +27,7 @@ function RosTCP(options) {
   }
 
   if(!this.socket && options.socket){
-    options.socket.binaryType = 'arraybuffer';
-    this.socket = Object.assign(options.socket, socketAdapter(this));
+    
   } else if(options.http || options.socketio){
     this.io = new SocketIO(options, this);
   }
@@ -60,6 +59,17 @@ RosTCP.prototype.connect = function(url) {
     // Similarly for close
     this.socket.close = this.socket.end;
   }
+};
+
+/**
+ * Connects to a live socket
+ *
+ * * url (String|Int|Object): Address and port to connect to (see http://nodejs.org/api/net.html)
+ *     format {host: String, port: Int} or (port:Int), or "host:port"
+ */
+RosTCP.prototype.attachSocket = function(socket) {
+  socket.binaryType = 'arraybuffer';
+  this.socket = Object.assign(socket, socketAdapter(this));
 };
 
 module.exports = RosTCP;
