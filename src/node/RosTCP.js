@@ -62,10 +62,9 @@ RosTCP.prototype.connect = function(url) {
 };
 
 /**
- * Connects to a live socket
+ * Connects to an existing socket
  *
- * * url (String|Int|Object): Address and port to connect to (see http://nodejs.org/api/net.html)
- *     format {host: String, port: Int} or (port:Int), or "host:port"
+ * * socket (Object): Websocket
  */
 RosTCP.prototype.attachSocket = function(socket) {
   socket.binaryType = 'arraybuffer';
