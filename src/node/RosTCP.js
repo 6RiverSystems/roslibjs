@@ -69,6 +69,8 @@ RosTCP.prototype.connect = function(url) {
 RosTCP.prototype.attachSocket = function(socket) {
   socket.binaryType = 'arraybuffer';
   this.socket = Object.assign(socket, socketAdapter(this));
+
+  socket.emit('open');
 };
 
 module.exports = RosTCP;
