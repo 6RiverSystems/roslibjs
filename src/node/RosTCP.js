@@ -26,9 +26,7 @@ function RosTCP(options) {
     });
   }
 
-  if(!this.socket && options.socket){
-    
-  } else if(options.http || options.socketio){
+  if(options.http || options.socketio){
     this.io = new SocketIO(options, this);
   }
 }
