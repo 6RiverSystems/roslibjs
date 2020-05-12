@@ -25,6 +25,7 @@ function RosTCP(options) {
       port: options.port
     });
   }
+
   if(options.http || options.socketio){
     this.io = new SocketIO(options, this);
   }
@@ -56,6 +57,18 @@ RosTCP.prototype.connect = function(url) {
     // Similarly for close
     this.socket.close = this.socket.end;
   }
+};
+
+/**
+ * Connects to an existing socket
+ *
+ * * socket (Object): Websocket
+ */
+RosTCP.prototype.attachSocket = function(socket) {
+  socket.binaryType = 'arraybuffer';
+  this.socket = Object.assign(socket, socketAdapter(this));
+
+  socket.emit('open');
 };
 
 module.exports = RosTCP;
