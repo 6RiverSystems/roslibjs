@@ -186,6 +186,29 @@ SimpleActionServer.prototype.sendFeedback = function(feedback2) {
 };
 
 /**
+*  Set action state to aborted and return to client
+*/
+
+SimpleActionServer.prototype.setAborted = function(result2) {
+    
+
+    var resultMessage = new Message({
+        status : {goal_id : this.currentGoal.goal_id, status : 4},
+        result : result2
+    });
+    this.resultPublisher.publish(resultMessage);
+
+    this.statusMessage.status_list = [];
+    if(this.nextGoal) {
+        this.currentGoal = this.nextGoal;
+        this.nextGoal = null;
+        this.emit('goal', this.currentGoal.goal);
+    } else {
+        this.currentGoal = null;
+    }
+};
+
+/**
 *  Handle case where client requests preemption
 */
 
