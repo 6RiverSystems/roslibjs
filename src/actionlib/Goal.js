@@ -5,7 +5,7 @@
 
 var Message = require('../core/Message');
 var EventEmitter2 = require('eventemitter2').EventEmitter2;
-var timeUtils = require('../util/timeUtil');
+
 /**
  * An actionlib goal goal is associated with an action server.
  *
@@ -31,7 +31,10 @@ function Goal(options) {
   // Fill in the goal message
   this.goalMessage = new Message({
     goal_id : {
-      stamp : timeUtils.dateToRosTime(date.getTime()),
+      stamp : {
+        secs : Math.floor(date * 1e-3),
+        nsecs : date % 1000 * 1000000
+      },
       id : this.goalID
     },
     goal : this.goalMessage
@@ -78,7 +81,10 @@ Goal.prototype.send = function(timeout) {
  */
 Goal.prototype.cancel = function() {
   var cancelMessage = new Message({
-    stamp: timeUtils.dateToRosTime(new Date().getTime()),
+    stamp: {
+      secs : Math.floor(date * 1e-3),
+      nsecs : date % 1000 * 1000000
+    },
     id : this.goalID
   });
   this.actionClient.cancelTopic.publish(cancelMessage);
