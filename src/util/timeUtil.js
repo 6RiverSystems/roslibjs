@@ -17,9 +17,9 @@
 
 'use strict';
 
-let NSEC_TO_SEC = 1e-9;
-let USEC_TO_SEC = 1e-6;
-let MSEC_TO_SEC = 1e-3;
+var NSEC_TO_SEC = 1e-9;
+var USEC_TO_SEC = 1e-6;
+var MSEC_TO_SEC = 1e-3;
 
 module.exports = function(self) {
 
@@ -47,15 +47,7 @@ module.exports = function(self) {
     return t.secs === 0 && t.nsecs === 0;
   }
 
-  function toNumber(t) {
-    return this.toSeconds(t);
-  }
-
   function toSeconds(t) {
     return t.secs + t.nsecs * NSEC_TO_SEC;
-  }
-
-  function timeComp(a, b) {
-    return Math.sign(this.toNumber(a) - this.toNumber(b));
   }
 };
