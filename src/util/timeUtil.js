@@ -17,9 +17,9 @@
 
 'use strict';
 
-NSEC_TO_SEC = 1e-9;
-USEC_TO_SEC = 1e-6;
-MSEC_TO_SEC = 1e-3;
+let NSEC_TO_SEC = 1e-9;
+let USEC_TO_SEC = 1e-6;
+let MSEC_TO_SEC = 1e-3;
 
 module.exports = function(self) {
 
@@ -34,10 +34,6 @@ module.exports = function(self) {
     var secs = Math.floor(date * MSEC_TO_SEC);
     var nsecs = date % 1000 * 1000000;
     return {'secs': secs, 'nsecs': nsecs};
-  }
-
-  function now() {
-    return this.dateToRosTime(Date.now());
   }
 
   function epoch() {
