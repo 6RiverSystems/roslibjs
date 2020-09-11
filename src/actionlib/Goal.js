@@ -80,6 +80,7 @@ Goal.prototype.send = function(timeout) {
  * Cancel the current goal.
  */
 Goal.prototype.cancel = function() {
+  var date = new Date();
   var cancelMessage = new Message({
     stamp: {
       secs : Math.floor(date * 1e-3),
