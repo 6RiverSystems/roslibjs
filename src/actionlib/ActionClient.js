@@ -125,7 +125,13 @@ ActionClient.prototype.__proto__ = EventEmitter2.prototype;
  * Cancel all goals associated with this ActionClient.
  */
 ActionClient.prototype.cancel = function() {
-  var cancelMessage = new Message();
+  var date = new Date();
+  var cancelMessage = new Message({
+    stamp: {
+      secs : Math.floor(date * 1e-3),
+      nsecs : date % 1000 * 1000000
+    }
+  });
   this.cancelTopic.publish(cancelMessage);
 };
 
