@@ -32,8 +32,8 @@ function Goal(options) {
   this.goalMessage = new Message({
     goal_id : {
       stamp : {
-        secs : 0,
-        nsecs : 0
+        secs : Math.floor(date * 1e-3),
+        nsecs : date % 1000 * 1000000
       },
       id : this.goalID
     },
@@ -80,7 +80,12 @@ Goal.prototype.send = function(timeout) {
  * Cancel the current goal.
  */
 Goal.prototype.cancel = function() {
+  var date = new Date();
   var cancelMessage = new Message({
+    stamp: {
+      secs : Math.floor(date * 1e-3),
+      nsecs : date % 1000 * 1000000
+    },
     id : this.goalID
   });
   this.actionClient.cancelTopic.publish(cancelMessage);
