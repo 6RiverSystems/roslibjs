@@ -8,6 +8,7 @@ jobs:
     steps:
       - checkout
       - run:
+          context: 6rs-circle
           name: Setup CI Environment
           command: |
             git submodule update --init
@@ -15,6 +16,7 @@ jobs:
       - restore_cache:
           key: dependency-cache-{{ checksum "package-lock.json" }}
       - run:
+          context: 6rs-circle
           name: Npm Install
           command: npm install
       - save_cache:
@@ -33,5 +35,6 @@ jobs:
           name: Run release
           command: ci_scripts/ci_tool.sh --run_release
       - run:
+          context: 6rs-circle
           name: Npm Publish
           command: npm publish
