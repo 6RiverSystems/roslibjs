@@ -14,23 +14,23 @@
   },
   "devDependencies": {
     "chai": "*",
-    "coveralls": "3.0.0",
-    "grunt": "^1.0.1",
-    "grunt-browserify": "^5.0.0",
+    "coveralls": "3.1.0",
+    "grunt": "1.3.0",
+    "grunt-browserify": "6.0.0",
     "grunt-cli": "^1.2.0",
     "grunt-contrib-clean": "^1.0.0",
     "grunt-contrib-jshint": "^1.0.0",
     "grunt-contrib-uglify": "^3.1.0",
     "grunt-contrib-watch": "^1.0.0",
-    "grunt-jsdoc": "^2.1.0",
+    "grunt-jsdoc": "2.4.1",
     "grunt-karma": "^2.0.0",
     "grunt-mocha-test": "^0.13.3",
-    "karma": "^3.1.4",
+    "karma": "6.3.2",
     "karma-chai": "^0.1.0",
     "karma-firefox-launcher": "^1.0.0",
     "karma-mocha": "^1.1.1",
     "load-grunt-tasks": "^3.3.0",
-    "mocha": "^4.0.1",
+    "mocha": "8.4.0",
     "nsp": "^2.8.0",
     "nyc": "^11.3.0",
     "time-grunt": "^1.0.0"
@@ -50,10 +50,10 @@
     "test": "test"
   },
   "engines": {
-    "node": ">=0.10"
+    "node": ">=10.16.2"
   },
   "scripts": {
-    "test": "nyc grunt test",
+    "test": "nyc grunt test --verbose",
     "test-examples": "grunt mochaTest:examples && xvfb-run -a karma start test/examples/karma.conf.js",
     "test-workersocket": "grunt uglify && xvfb-run -a karma start test/workersocket/karma.conf.js",
     "test-tcp": "grunt mochaTest:tcp",
