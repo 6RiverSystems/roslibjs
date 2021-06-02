@@ -53,7 +53,7 @@
     "node": ">=0.10"
   },
   "scripts": {
-    "test": "nyc grunt test",
+    "test": "nyc grunt test --verbose",
     "test-examples": "grunt mochaTest:examples && xvfb-run -a karma start test/examples/karma.conf.js",
     "test-workersocket": "grunt uglify && xvfb-run -a karma start test/workersocket/karma.conf.js",
     "test-tcp": "grunt mochaTest:tcp",
