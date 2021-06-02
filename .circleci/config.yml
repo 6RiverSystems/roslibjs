@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/node:8.8.1
+      - image: circleci/node:10.17.0
         environment:
           - MOCHA_OPTS: --reporter mocha-junit-reporter --reporter-options mochaFile=./reports/junit/mocha/mocha.xml
     steps:
@@ -35,3 +35,10 @@ jobs:
       - run:
           name: Npm Publish
           command: npm publish
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build:
+          context: 6rs-circle
