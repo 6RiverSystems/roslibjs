@@ -3,6 +3,10 @@
 // See the issue here: https://github.com/browserify/webworkify/issues/43
 // And the patch applied here: https://github.com/browserify/webworkify/issues/43#issuecomment-843085544
 
+// Do not run jshint over this file.  While we could update this file to match roslibs standards,
+// it's safer to leave it as-is except for the required patch.
+/* jshint ignore:start */
+
 var stringify = JSON.stringify;
 
 module.exports = function (fn, options) {
@@ -83,3 +87,5 @@ module.exports = function (fn, options) {
     worker.objectURL = workerUrl;
     return worker;
 };
+
+/* jshint ignore:end */
