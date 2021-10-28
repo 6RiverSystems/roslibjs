@@ -1,4 +1,7 @@
-
+// Internalized version of https://github.com/browserify/webworkify.
+// webworkify does not support Webpack 5, and hasn't had an update since Nov 13, 2017 (as of this comment).
+// See the issue here: https://github.com/browserify/webworkify/issues/43
+// And the patch applied here: https://github.com/browserify/webworkify/issues/43#issuecomment-843085544
 
 var stringify = JSON.stringify;
 
