@@ -1,4 +1,4 @@
-var work = require('webworkify');
+var work = require('./webworkify');
 var workerSocketImpl = require('./workerSocketImpl');
 
 function WorkerSocket(uri) {
