@@ -1,4 +1,6 @@
-version: 2
+version: 2.1
+orbs:
+  sixrs-gke: sixriversystems/sixrs-gke@3
 jobs:
   build:
     docker:
@@ -7,11 +9,7 @@ jobs:
           - MOCHA_OPTS: --reporter mocha-junit-reporter --reporter-options mochaFile=./reports/junit/mocha/mocha.xml
     steps:
       - checkout
-      - run:
-          name: Setup CI Environment
-          command: |
-            git submodule update --init
-            ci_scripts/ci_tool.sh --setup_npm
+      - sixrs-gke/setup-private-npm
       - restore_cache:
           key: dependency-cache-{{ checksum "package-lock.json" }}
       - run:
@@ -29,9 +27,8 @@ jobs:
           prefix: reports/junit/
       - store_test_results:
           path: reports/junit/
-      - run:
-          name: Run release
-          command: ci_scripts/ci_tool.sh --run_release
+      - sixrs-gke/run-release
+      - sixrs-gke/npm-publish
       - run:
           name: Npm Publish
           command: npm publish
