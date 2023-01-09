@@ -1,4 +1,4 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 /*
  * The MIT License (MIT)
  *
@@ -407,7 +407,7 @@ else if (!global.CBOR)
 })(this);
 
 },{}],2:[function(require,module,exports){
-(function (process){
+(function (process){(function (){
 /*!
  * EventEmitter2
  * https://github.com/hij1nx/EventEmitter2
@@ -1185,7 +1185,7 @@ else if (!global.CBOR)
   }
 }();
 
-}).call(this,require('_process'))
+}).call(this)}).call(this,require('_process'))
 },{"_process":4}],3:[function(require,module,exports){
 /*
 object-assign
@@ -1465,88 +1465,6 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],5:[function(require,module,exports){
-var bundleFn = arguments[3];
-var sources = arguments[4];
-var cache = arguments[5];
-
-var stringify = JSON.stringify;
-
-module.exports = function (fn, options) {
-    var wkey;
-    var cacheKeys = Object.keys(cache);
-
-    for (var i = 0, l = cacheKeys.length; i < l; i++) {
-        var key = cacheKeys[i];
-        var exp = cache[key].exports;
-        // Using babel as a transpiler to use esmodule, the export will always
-        // be an object with the default export as a property of it. To ensure
-        // the existing api and babel esmodule exports are both supported we
-        // check for both
-        if (exp === fn || exp && exp.default === fn) {
-            wkey = key;
-            break;
-        }
-    }
-
-    if (!wkey) {
-        wkey = Math.floor(Math.pow(16, 8) * Math.random()).toString(16);
-        var wcache = {};
-        for (var i = 0, l = cacheKeys.length; i < l; i++) {
-            var key = cacheKeys[i];
-            wcache[key] = key;
-        }
-        sources[wkey] = [
-            'function(require,module,exports){' + fn + '(self); }',
-            wcache
-        ];
-    }
-    var skey = Math.floor(Math.pow(16, 8) * Math.random()).toString(16);
-
-    var scache = {}; scache[wkey] = wkey;
-    sources[skey] = [
-        'function(require,module,exports){' +
-            // try to call default if defined to also support babel esmodule exports
-            'var f = require(' + stringify(wkey) + ');' +
-            '(f.default ? f.default : f)(self);' +
-        '}',
-        scache
-    ];
-
-    var workerSources = {};
-    resolveSources(skey);
-
-    function resolveSources(key) {
-        workerSources[key] = true;
-
-        for (var depPath in sources[key][1]) {
-            var depKey = sources[key][1][depPath];
-            if (!workerSources[depKey]) {
-                resolveSources(depKey);
-            }
-        }
-    }
-
-    var src = '(' + bundleFn + ')({'
-        + Object.keys(workerSources).map(function (key) {
-            return stringify(key) + ':['
-                + sources[key][0]
-                + ',' + stringify(sources[key][1]) + ']'
-            ;
-        }).join(',')
-        + '},{},[' + stringify(skey) + '])'
-    ;
-
-    var URL = window.URL || window.webkitURL || window.mozURL || window.msURL;
-
-    var blob = new Blob([src], { type: 'text/javascript' });
-    if (options && options.bare) { return blob; }
-    var workerUrl = URL.createObjectURL(blob);
-    var worker = new Worker(workerUrl);
-    worker.objectURL = workerUrl;
-    return worker;
-};
-
-},{}],6:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -1576,11 +1494,11 @@ assign(ROSLIB, require('./urdf'));
 
 module.exports = ROSLIB;
 
-},{"./actionlib":12,"./core":21,"./math":26,"./tf":29,"./urdf":41,"object-assign":3}],7:[function(require,module,exports){
-(function (global){
+},{"./actionlib":11,"./core":20,"./math":25,"./tf":28,"./urdf":40,"object-assign":3}],6:[function(require,module,exports){
+(function (global){(function (){
 global.ROSLIB = require('./RosLib');
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./RosLib":6}],8:[function(require,module,exports){
+}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./RosLib":5}],7:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -1708,7 +1626,13 @@ ActionClient.prototype.__proto__ = EventEmitter2.prototype;
  * Cancel all goals associated with this ActionClient.
  */
 ActionClient.prototype.cancel = function() {
-  var cancelMessage = new Message();
+  var date = new Date();
+  var cancelMessage = new Message({
+    stamp: {
+      secs : Math.floor(date * 1e-3),
+      nsecs : date % 1000 * 1000000
+    }
+  });
   this.cancelTopic.publish(cancelMessage);
 };
 
@@ -1725,7 +1649,7 @@ ActionClient.prototype.dispose = function() {
 
 module.exports = ActionClient;
 
-},{"../core/Message":13,"../core/Topic":20,"eventemitter2":2}],9:[function(require,module,exports){
+},{"../core/Message":12,"../core/Topic":19,"eventemitter2":2}],8:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Justin Young - justin@oodar.com.au
@@ -1814,7 +1738,7 @@ ActionListener.prototype.__proto__ = EventEmitter2.prototype;
 
 module.exports = ActionListener;
 
-},{"../core/Message":13,"../core/Topic":20,"eventemitter2":2}],10:[function(require,module,exports){
+},{"../core/Message":12,"../core/Topic":19,"eventemitter2":2}],9:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Russell Toris - rctoris@wpi.edu
@@ -1849,8 +1773,8 @@ function Goal(options) {
   this.goalMessage = new Message({
     goal_id : {
       stamp : {
-        secs : 0,
-        nsecs : 0
+        secs : Math.floor(date * 1e-3),
+        nsecs : date % 1000 * 1000000
       },
       id : this.goalID
     },
@@ -1897,14 +1821,19 @@ Goal.prototype.send = function(timeout) {
  * Cancel the current goal.
  */
 Goal.prototype.cancel = function() {
+  var date = new Date();
   var cancelMessage = new Message({
+    stamp: {
+      secs : Math.floor(date * 1e-3),
+      nsecs : date % 1000 * 1000000
+    },
     id : this.goalID
   });
   this.actionClient.cancelTopic.publish(cancelMessage);
 };
 
 module.exports = Goal;
-},{"../core/Message":13,"eventemitter2":2}],11:[function(require,module,exports){
+},{"../core/Message":12,"eventemitter2":2}],10:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Laura Lindzey - lindzey@gmail.com
@@ -2093,6 +2022,29 @@ SimpleActionServer.prototype.sendFeedback = function(feedback2) {
 };
 
 /**
+*  Set action state to aborted and return to client
+*/
+
+SimpleActionServer.prototype.setAborted = function(result2) {
+    
+
+    var resultMessage = new Message({
+        status : {goal_id : this.currentGoal.goal_id, status : 4},
+        result : result2
+    });
+    this.resultPublisher.publish(resultMessage);
+
+    this.statusMessage.status_list = [];
+    if(this.nextGoal) {
+        this.currentGoal = this.nextGoal;
+        this.nextGoal = null;
+        this.emit('goal', this.currentGoal.goal);
+    } else {
+        this.currentGoal = null;
+    }
+};
+
+/**
 *  Handle case where client requests preemption
 */
 
@@ -2114,7 +2066,7 @@ SimpleActionServer.prototype.setPreempted = function() {
 };
 
 module.exports = SimpleActionServer;
-},{"../core/Message":13,"../core/Topic":20,"eventemitter2":2}],12:[function(require,module,exports){
+},{"../core/Message":12,"../core/Topic":19,"eventemitter2":2}],11:[function(require,module,exports){
 var Ros = require('../core/Ros');
 var mixin = require('../mixin');
 
@@ -2127,7 +2079,7 @@ var action = module.exports = {
 
 mixin(Ros, ['ActionClient', 'SimpleActionServer'], action);
 
-},{"../core/Ros":15,"../mixin":27,"./ActionClient":8,"./ActionListener":9,"./Goal":10,"./SimpleActionServer":11}],13:[function(require,module,exports){
+},{"../core/Ros":14,"../mixin":26,"./ActionClient":7,"./ActionListener":8,"./Goal":9,"./SimpleActionServer":10}],12:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2146,7 +2098,7 @@ function Message(values) {
 }
 
 module.exports = Message;
-},{"object-assign":3}],14:[function(require,module,exports){
+},{"object-assign":3}],13:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2230,7 +2182,7 @@ Param.prototype.delete = function(callback) {
 };
 
 module.exports = Param;
-},{"./Service":16,"./ServiceRequest":17}],15:[function(require,module,exports){
+},{"./Service":15,"./ServiceRequest":16}],14:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2860,7 +2812,7 @@ Ros.prototype.decodeTypeDefs = function(defs) {
 
 module.exports = Ros;
 
-},{"../util/workerSocket":47,"./Service":16,"./ServiceRequest":17,"./SocketAdapter.js":19,"eventemitter2":2,"object-assign":3,"ws":43}],16:[function(require,module,exports){
+},{"../util/workerSocket":47,"./Service":15,"./ServiceRequest":16,"./SocketAdapter.js":18,"eventemitter2":2,"object-assign":3,"ws":42}],15:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -2985,7 +2937,7 @@ Service.prototype._serviceResponse = function(rosbridgeRequest) {
 
 module.exports = Service;
 
-},{"./ServiceRequest":17,"./ServiceResponse":18,"eventemitter2":2}],17:[function(require,module,exports){
+},{"./ServiceRequest":16,"./ServiceResponse":17,"eventemitter2":2}],16:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - balexander@willowgarage.com
@@ -3004,7 +2956,7 @@ function ServiceRequest(values) {
 }
 
 module.exports = ServiceRequest;
-},{"object-assign":3}],18:[function(require,module,exports){
+},{"object-assign":3}],17:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - balexander@willowgarage.com
@@ -3023,7 +2975,7 @@ function ServiceResponse(values) {
 }
 
 module.exports = ServiceResponse;
-},{"object-assign":3}],19:[function(require,module,exports){
+},{"object-assign":3}],18:[function(require,module,exports){
 /**
  * Socket event handling utilities for handling events on either
  * WebSocket and TCP sockets
@@ -3146,7 +3098,7 @@ function SocketAdapter(client) {
 
 module.exports = SocketAdapter;
 
-},{"../util/cborTypedArrayTags":42,"../util/decompressPng":45,"cbor-js":1}],20:[function(require,module,exports){
+},{"../util/cborTypedArrayTags":41,"../util/decompressPng":44,"cbor-js":1}],19:[function(require,module,exports){
 /**
  * @fileoverview
  * @author Brandon Alexander - baalexander@gmail.com
@@ -3412,7 +3364,7 @@ Topic.prototype.publish = function(message) {
 
 module.exports = Topic;
 
-},{"./Message":13,"eventemitter2":2}],21:[function(require,module,exports){
+},{"./Message":12,"eventemitter2":2}],20:[function(require,module,exports){
 var mixin = require('../mixin');
 
 var core = module.exports = {
@@ -3427,7 +3379,7 @@ var core = module.exports = {
 
 mixin(core.Ros, ['Param', 'Service', 'Topic'], core);
 
-},{"../mixin":27,"./Message":13,"./Param":14,"./Ros":15,"./Service":16,"./ServiceRequest":17,"./ServiceResponse":18,"./Topic":20}],22:[function(require,module,exports){
+},{"../mixin":26,"./Message":12,"./Param":13,"./Ros":14,"./Service":15,"./ServiceRequest":16,"./ServiceResponse":17,"./Topic":19}],21:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3500,7 +3452,7 @@ Pose.prototype.getInverse = function() {
 };
 
 module.exports = Pose;
-},{"./Quaternion":23,"./Vector3":25}],23:[function(require,module,exports){
+},{"./Quaternion":22,"./Vector3":24}],22:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3594,7 +3546,7 @@ Quaternion.prototype.clone = function() {
 
 module.exports = Quaternion;
 
-},{}],24:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3628,7 +3580,7 @@ Transform.prototype.clone = function() {
 };
 
 module.exports = Transform;
-},{"./Quaternion":23,"./Vector3":25}],25:[function(require,module,exports){
+},{"./Quaternion":22,"./Vector3":24}],24:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3697,7 +3649,7 @@ Vector3.prototype.clone = function() {
 };
 
 module.exports = Vector3;
-},{}],26:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 module.exports = {
     Pose: require('./Pose'),
     Quaternion: require('./Quaternion'),
@@ -3705,7 +3657,7 @@ module.exports = {
     Vector3: require('./Vector3')
 };
 
-},{"./Pose":22,"./Quaternion":23,"./Transform":24,"./Vector3":25}],27:[function(require,module,exports){
+},{"./Pose":21,"./Quaternion":22,"./Transform":23,"./Vector3":24}],26:[function(require,module,exports){
 /**
  * Mixin a feature to the core/Ros prototype.
  * For example, mixin(Ros, ['Topic'], {Topic: <Topic>})
@@ -3724,7 +3676,7 @@ module.exports = function(Ros, classes, features) {
     });
 };
 
-},{}],28:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /**
  * @fileoverview
  * @author David Gossow - dgossow@willowgarage.com
@@ -3945,7 +3897,7 @@ TFClient.prototype.dispose = function() {
 
 module.exports = TFClient;
 
-},{"../actionlib/ActionClient":8,"../actionlib/Goal":10,"../core/Service.js":16,"../core/ServiceRequest.js":17,"../math/Transform":24}],29:[function(require,module,exports){
+},{"../actionlib/ActionClient":7,"../actionlib/Goal":9,"../core/Service.js":15,"../core/ServiceRequest.js":16,"../math/Transform":23}],28:[function(require,module,exports){
 var Ros = require('../core/Ros');
 var mixin = require('../mixin');
 
@@ -3954,7 +3906,7 @@ var tf = module.exports = {
 };
 
 mixin(Ros, ['TFClient'], tf);
-},{"../core/Ros":15,"../mixin":27,"./TFClient":28}],30:[function(require,module,exports){
+},{"../core/Ros":14,"../mixin":26,"./TFClient":27}],29:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -3985,7 +3937,7 @@ function UrdfBox(options) {
 }
 
 module.exports = UrdfBox;
-},{"../math/Vector3":25,"./UrdfTypes":39}],31:[function(require,module,exports){
+},{"../math/Vector3":24,"./UrdfTypes":38}],30:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -4009,7 +3961,7 @@ function UrdfColor(options) {
 }
 
 module.exports = UrdfColor;
-},{}],32:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -4032,7 +3984,7 @@ function UrdfCylinder(options) {
 }
 
 module.exports = UrdfCylinder;
-},{"./UrdfTypes":39}],33:[function(require,module,exports){
+},{"./UrdfTypes":38}],32:[function(require,module,exports){
 /**
  * @fileOverview
  * @author David V. Lu!!  davidvlu@gmail.com
@@ -4125,7 +4077,7 @@ function UrdfJoint(options) {
 
 module.exports = UrdfJoint;
 
-},{"../math/Pose":22,"../math/Quaternion":23,"../math/Vector3":25}],34:[function(require,module,exports){
+},{"../math/Pose":21,"../math/Quaternion":22,"../math/Vector3":24}],33:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -4154,7 +4106,7 @@ function UrdfLink(options) {
 }
 
 module.exports = UrdfLink;
-},{"./UrdfVisual":40}],35:[function(require,module,exports){
+},{"./UrdfVisual":39}],34:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -4204,7 +4156,7 @@ UrdfMaterial.prototype.assign = function(obj) {
 
 module.exports = UrdfMaterial;
 
-},{"./UrdfColor":31,"object-assign":3}],36:[function(require,module,exports){
+},{"./UrdfColor":30,"object-assign":3}],35:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -4241,7 +4193,7 @@ function UrdfMesh(options) {
 }
 
 module.exports = UrdfMesh;
-},{"../math/Vector3":25,"./UrdfTypes":39}],37:[function(require,module,exports){
+},{"../math/Vector3":24,"./UrdfTypes":38}],36:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -4338,7 +4290,7 @@ function UrdfModel(options) {
 
 module.exports = UrdfModel;
 
-},{"./UrdfJoint":33,"./UrdfLink":34,"./UrdfMaterial":35,"xmldom":46}],38:[function(require,module,exports){
+},{"./UrdfJoint":32,"./UrdfLink":33,"./UrdfMaterial":34,"xmldom":45}],37:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -4360,7 +4312,7 @@ function UrdfSphere(options) {
 }
 
 module.exports = UrdfSphere;
-},{"./UrdfTypes":39}],39:[function(require,module,exports){
+},{"./UrdfTypes":38}],38:[function(require,module,exports){
 module.exports = {
 	URDF_SPHERE : 0,
 	URDF_BOX : 1,
@@ -4368,7 +4320,7 @@ module.exports = {
 	URDF_MESH : 3
 };
 
-},{}],40:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 /**
  * @fileOverview 
  * @author Benjamin Pitzer - ben.pitzer@gmail.com
@@ -4497,7 +4449,7 @@ function UrdfVisual(options) {
 }
 
 module.exports = UrdfVisual;
-},{"../math/Pose":22,"../math/Quaternion":23,"../math/Vector3":25,"./UrdfBox":30,"./UrdfCylinder":32,"./UrdfMaterial":35,"./UrdfMesh":36,"./UrdfSphere":38}],41:[function(require,module,exports){
+},{"../math/Pose":21,"../math/Quaternion":22,"../math/Vector3":24,"./UrdfBox":29,"./UrdfCylinder":31,"./UrdfMaterial":34,"./UrdfMesh":35,"./UrdfSphere":37}],40:[function(require,module,exports){
 module.exports = require('object-assign')({
     UrdfBox: require('./UrdfBox'),
     UrdfColor: require('./UrdfColor'),
@@ -4510,7 +4462,7 @@ module.exports = require('object-assign')({
     UrdfVisual: require('./UrdfVisual')
 }, require('./UrdfTypes'));
 
-},{"./UrdfBox":30,"./UrdfColor":31,"./UrdfCylinder":32,"./UrdfLink":34,"./UrdfMaterial":35,"./UrdfMesh":36,"./UrdfModel":37,"./UrdfSphere":38,"./UrdfTypes":39,"./UrdfVisual":40,"object-assign":3}],42:[function(require,module,exports){
+},{"./UrdfBox":29,"./UrdfColor":30,"./UrdfCylinder":31,"./UrdfLink":33,"./UrdfMaterial":34,"./UrdfMesh":35,"./UrdfModel":36,"./UrdfSphere":37,"./UrdfTypes":38,"./UrdfVisual":39,"object-assign":3}],41:[function(require,module,exports){
 'use strict';
 
 var UPPER32 = Math.pow(2, 32);
@@ -4630,15 +4582,15 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = cborTypedArrayTagger;
 }
 
-},{}],43:[function(require,module,exports){
-module.exports = typeof window !== 'undefined' ? window.WebSocket : WebSocket;
+},{}],42:[function(require,module,exports){
+module.exports = (typeof window !== 'undefined' && typeof window.WebSocket !== 'undefined') ? window.WebSocket : WebSocket;
 
-},{}],44:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 /* global document */
 module.exports = function Canvas() {
 	return document.createElement('canvas');
 };
-},{}],45:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 /**
  * @fileOverview
  * @author Graeme Yeates - github.com/megawac
@@ -4647,7 +4599,13 @@ module.exports = function Canvas() {
 'use strict';
 
 var Canvas = require('canvas');
-var Image = Canvas.Image || window.Image;
+var Image;
+if (typeof Canvas !== 'undefined' && typeof Canvas.Image !== 'undefined') {
+  Image = Canvas.Image;
+}
+else {
+  Image = window.Image;
+}
 
 /**
  * If a message was compressed as a PNG image (a compression hack since
@@ -4696,13 +4654,127 @@ function decompressPng(data, callback) {
 
 module.exports = decompressPng;
 
-},{"canvas":44}],46:[function(require,module,exports){
+},{"canvas":43}],45:[function(require,module,exports){
 exports.DOMImplementation = window.DOMImplementation;
 exports.XMLSerializer = window.XMLSerializer;
 exports.DOMParser = window.DOMParser;
 
+},{}],46:[function(require,module,exports){
+/**
+ This software is released under the MIT license:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+// Internalized version of https://github.com/browserify/webworkify.
+// webworkify does not support Webpack 5, and hasn't had an update since Nov 13, 2017 (as of this comment).
+// See the issue here: https://github.com/browserify/webworkify/issues/43
+// And the patch applied here: https://github.com/browserify/webworkify/issues/43#issuecomment-843085544
+
+// Do not run jshint over this file.  While we could update this file to match roslibs standards,
+// it's safer to leave it as-is except for the required patch.
+/* jshint ignore:start */
+
+var stringify = JSON.stringify;
+
+module.exports = function (fn, options) {
+    var bundleFn = arguments[3];
+    var sources = arguments[4];
+    var cache = arguments[5];
+
+    var wkey;
+    var cacheKeys = Object.keys(cache);
+
+    for (var i = 0, l = cacheKeys.length; i < l; i++) {
+        var key = cacheKeys[i];
+        var exp = cache[key].exports;
+        // Using babel as a transpiler to use esmodule, the export will always
+        // be an object with the default export as a property of it. To ensure
+        // the existing api and babel esmodule exports are both supported we
+        // check for both
+        if (exp === fn || exp && exp.default === fn) {
+            wkey = key;
+            break;
+        }
+    }
+
+    if (!wkey) {
+        wkey = Math.floor(Math.pow(16, 8) * Math.random()).toString(16);
+        var wcache = {};
+        for (var i = 0, l = cacheKeys.length; i < l; i++) {
+            var key = cacheKeys[i];
+            wcache[key] = key;
+        }
+        sources[wkey] = [
+            'function(require,module,exports){' + fn + '(self); }',
+            wcache
+        ];
+    }
+    var skey = Math.floor(Math.pow(16, 8) * Math.random()).toString(16);
+
+    var scache = {}; scache[wkey] = wkey;
+    sources[skey] = [
+        'function(require,module,exports){' +
+            // try to call default if defined to also support babel esmodule exports
+            'var f = require(' + stringify(wkey) + ');' +
+            '(f.default ? f.default : f)(self);' +
+        '}',
+        scache
+    ];
+
+    var workerSources = {};
+    resolveSources(skey);
+
+    function resolveSources(key) {
+        workerSources[key] = true;
+
+        for (var depPath in sources[key][1]) {
+            var depKey = sources[key][1][depPath];
+            if (!workerSources[depKey]) {
+                resolveSources(depKey);
+            }
+        }
+    }
+
+    var src = '(' + bundleFn + ')({'
+        + Object.keys(workerSources).map(function (key) {
+            return stringify(key) + ':['
+                + sources[key][0]
+                + ',' + stringify(sources[key][1]) + ']'
+            ;
+        }).join(',')
+        + '},{},[' + stringify(skey) + '])'
+    ;
+
+    var URL = window.URL || window.webkitURL || window.mozURL || window.msURL;
+
+    var blob = new Blob([src], { type: 'text/javascript' });
+    if (options && options.bare) { return blob; }
+    var workerUrl = URL.createObjectURL(blob);
+    var worker = new Worker(workerUrl);
+    worker.objectURL = workerUrl;
+    return worker;
+};
+
+/* jshint ignore:end */
+
 },{}],47:[function(require,module,exports){
-var work = require('webworkify');
+var work = require('./webworkify');
 var workerSocketImpl = require('./workerSocketImpl');
 
 function WorkerSocket(uri) {
@@ -4747,7 +4819,7 @@ WorkerSocket.prototype.close = function() {
 
 module.exports = WorkerSocket;
 
-},{"./workerSocketImpl":48,"webworkify":5}],48:[function(require,module,exports){
+},{"./webworkify":46,"./workerSocketImpl":48}],48:[function(require,module,exports){
 var WebSocket = WebSocket || require('ws');
 
 module.exports = function(self) {
@@ -4797,4 +4869,4 @@ module.exports = function(self) {
   });
 };
 
-},{"ws":43}]},{},[7]);
+},{"ws":42}]},{},[6]);
