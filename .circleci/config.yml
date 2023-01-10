@@ -29,9 +29,6 @@ jobs:
           path: reports/junit/
       - sixrs-gke/run-release
       - sixrs-gke/npm-publish
-      - run:
-          name: Npm Publish
-          command: npm publish
 
 workflows:
   version: 2
