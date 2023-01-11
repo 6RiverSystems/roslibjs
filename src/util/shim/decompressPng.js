@@ -6,7 +6,13 @@
 'use strict';
 
 var Canvas = require('canvas');
-var Image = Canvas.Image || window.Image;
+var Image;
+if (typeof Canvas !== 'undefined' && typeof Canvas.Image !== 'undefined') {
+  Image = Canvas.Image;
+}
+else {
+  Image = window.Image;
+}
 
 /**
  * If a message was compressed as a PNG image (a compression hack since
