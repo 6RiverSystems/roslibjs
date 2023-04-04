@@ -4,6 +4,6 @@
  */
 
 exports.DOMImplementation =
-  typeof window !== "undefined" && window.DOMImplementation;
-exports.XMLSerializer = typeof window !== "undefined" && window.XMLSerializer;
-exports.DOMParser = typeof window !== "undefined" && window.DOMParser;
+  typeof window !== 'undefined' && window.DOMImplementation;
+exports.XMLSerializer = typeof window !== 'undefined' && window.XMLSerializer;
+exports.DOMParser = typeof window !== 'undefined' && window.DOMParser;
