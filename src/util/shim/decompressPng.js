@@ -3,14 +3,18 @@
  * @author Graeme Yeates - github.com/megawac
  */
 
+/**
+ * 6RS Changes - This shim could not work in a webworker.  Add guards around
+ * accessing the window object, and disable decompressing messages sent as PNGs
+ */
+
 'use strict';
 
 var Canvas = require('canvas');
 var Image;
 if (typeof Canvas !== 'undefined' && typeof Canvas.Image !== 'undefined') {
   Image = Canvas.Image;
-}
-else {
+} else if (typeof window !== 'undefined' && window.Image !== 'undefined') {
   Image = window.Image;
 }
 
@@ -25,6 +29,9 @@ else {
  *   * data - the uncompressed data
  */
 function decompressPng(data, callback) {
+  if (!Image) {
+    callback('Cannot decompress PNGs in this environment');
+  }
   // Uncompresses the data before sending it through (use image/canvas to do so).
   var image = new Image();
   // When the image loads, extracts the raw data (JSON message).
