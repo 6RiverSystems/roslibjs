@@ -8,7 +8,7 @@
  *
  * If you use nodejs, this is the variable you get when you require('roslib')
  */
-var ROSLIB = this.ROSLIB || {
+var ROSLIB = this && this.ROSLIB || {
   REVISION : '1.0.1'
 };
 
