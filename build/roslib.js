@@ -1475,7 +1475,7 @@ process.umask = function() { return 0; };
  *
  * If you use nodejs, this is the variable you get when you require('roslib')
  */
-var ROSLIB = this.ROSLIB || {
+var ROSLIB = this && this.ROSLIB || {
   REVISION : '1.0.1'
 };
 
@@ -4596,14 +4596,18 @@ module.exports = function Canvas() {
  * @author Graeme Yeates - github.com/megawac
  */
 
+/**
+ * 6RS Changes - This shim could not work in a webworker.  Add guards around
+ * accessing the window object, and disable decompressing messages sent as PNGs
+ */
+
 'use strict';
 
 var Canvas = require('canvas');
 var Image;
 if (typeof Canvas !== 'undefined' && typeof Canvas.Image !== 'undefined') {
   Image = Canvas.Image;
-}
-else {
+} else if (typeof window !== 'undefined' && window.Image !== 'undefined') {
   Image = window.Image;
 }
 
@@ -4618,6 +4622,9 @@ else {
  *   * data - the uncompressed data
  */
 function decompressPng(data, callback) {
+  if (!Image) {
+    callback('Cannot decompress PNGs in this environment');
+  }
   // Uncompresses the data before sending it through (use image/canvas to do so).
   var image = new Image();
   // When the image loads, extracts the raw data (JSON message).
@@ -4655,9 +4662,15 @@ function decompressPng(data, callback) {
 module.exports = decompressPng;
 
 },{"canvas":43}],45:[function(require,module,exports){
-exports.DOMImplementation = window.DOMImplementation;
-exports.XMLSerializer = window.XMLSerializer;
-exports.DOMParser = window.DOMParser;
+/**
+ * 6RS Changes - This shim could not work in a webworker.  Protect against accessing
+ * the window
+ */
+
+exports.DOMImplementation =
+  typeof window !== 'undefined' && window.DOMImplementation;
+exports.XMLSerializer = typeof window !== 'undefined' && window.XMLSerializer;
+exports.DOMParser = typeof window !== 'undefined' && window.DOMParser;
 
 },{}],46:[function(require,module,exports){
 /**
