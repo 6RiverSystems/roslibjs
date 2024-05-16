@@ -856,7 +856,7 @@ export = ROSLIB;
           * @param {ActionClient} options.actionClient - The ROSLIB.ActionClient to use with this goal.
           * @param {any} options.goalMessage - The JSON object containing the goal for the action server.
           */
-         constructor(options: { actionClient: ActionClient; goalMessage: any });
+         constructor(options: { actionClient: ActionClient; goalMessage: any; goalID?: any });
  
          /**
           * Connect callback functions to goal based events.
