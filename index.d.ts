@@ -334,6 +334,13 @@ export = ROSLIB;
              callback: (result: { topics: string[]; types: string[]; typedefs_full_text: string[] }) => void,
              failedCallback?: (error: string) => void,
          ): void;
+
+         /**
+         * Connects to an existing socket - only implemented for TCP connections
+         *
+         * @param {any} socket - Websocket connection to attach (instead of connecting directly)
+         */
+         attachSocket(socket: any): void;
      }
  
      export class Message {
