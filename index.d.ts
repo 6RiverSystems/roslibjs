@@ -37,12 +37,14 @@ export = ROSLIB;
           * @param {boolean} [options.groovyCompatibility=true] - Don't use interfaces that changed after the last groovy release or rosbridge_suite and related tools.
           * @param {string} [options.transportLibrary=websocket] - One of 'websocket', 'workersocket', 'socket.io' or RTCPeerConnection instance controlling how the connection is created in `connect`.
           * @param {Object} [options.transportOptions={}] - The options to use when creating a connection. Currently only used if `transportLibrary` is RTCPeerConnection.
+          * @param {encoding} [options.encoding=utf8] - The encoding to use when interpreting binary data (only for TCP).
           */
          constructor(options: {
              url?: string | undefined;
              groovyCompatibility?: boolean | undefined;
              transportLibrary?: "websocket" | "workersocket" | "socket.io" | RTCPeerConnection | undefined;
              transportOptions?: RTCDataChannelInit | undefined;
+             encoding?: string
          });
  
          readonly isConnected: boolean;
