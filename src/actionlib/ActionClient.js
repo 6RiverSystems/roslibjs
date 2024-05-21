@@ -87,7 +87,7 @@ function ActionClient(options) {
     // remove the goal if it is cancelled or aborted
     [5, 6].forEach(function(status) {
       if (statusMessage.status_list.includes(status)) {
-        delete this.goals[statusMessage.status.goal_id.id];
+        delete that.goals[statusMessage.status.goal_id.id];
       }
     });
   });
@@ -112,7 +112,7 @@ function ActionClient(options) {
       goal.emit('result', resultMessage.result);
     }
     // remove the goal if it is completed
-    delete this.goals[goal.goalID];
+    delete that.goals[goal.goalID];
   });
 
   // If timeout specified, emit a 'timeout' event if the action server does not respond
