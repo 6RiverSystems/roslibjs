@@ -87,7 +87,9 @@ function ActionClient(options) {
     // remove the goal if it is cancelled or aborted
     [5, 6].forEach(function(status) {
       if (statusMessage.status_list.includes(status)) {
-        delete that.goals[statusMessage.status.goal_id.id];
+        if (!!that.goals[statusMessage.status.goal_id.id]) {
+          delete that.goals[statusMessage.status.goal_id.id];
+        }
       }
     });
   });
@@ -107,12 +109,15 @@ function ActionClient(options) {
   this.resultListener.subscribe(function(resultMessage) {
     var goal = that.goals[resultMessage.status.goal_id.id];
 
-    if (goal && !this.omitResult) {
-      goal.emit('status', resultMessage.status);
-      goal.emit('result', resultMessage.result);
+    if (goal) {
+      if (!this.omitResult) {
+        goal.emit('status', resultMessage.status);
+        goal.emit('result', resultMessage.result);
+      }
+  
+      // remove the goal if it is completed
+      delete that.goals[goal.goalID];
     }
-    // remove the goal if it is completed
-    delete that.goals[goal.goalID];
   });
 
   // If timeout specified, emit a 'timeout' event if the action server does not respond
