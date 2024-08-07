@@ -74,17 +74,25 @@ function ActionClient(options) {
   this.cancelTopic.advertise();
 
   // subscribe to the status topic
-  if (!this.omitStatus) {
-    this.statusListener.subscribe(function(statusMessage) {
-      receivedStatus = true;
+  this.statusListener.subscribe(function(statusMessage) {
+    receivedStatus = true;
+    if (!this.omitStatus) {
       statusMessage.status_list.forEach(function(status) {
         var goal = that.goals[status.goal_id.id];
         if (goal) {
           goal.emit('status', status);
         }
       });
+    }
+    // remove the goal if it is cancelled or aborted
+    [5, 6].forEach(function(status) {
+      if (statusMessage.status_list.includes(status)) {
+        if (!!that.goals[statusMessage.status.goal_id.id]) {
+          delete that.goals[statusMessage.status.goal_id.id];
+        }
+      }
     });
-  }
+  });
 
   // subscribe the the feedback topic
   if (!this.omitFeedback) {
@@ -98,16 +106,19 @@ function ActionClient(options) {
   }
 
   // subscribe to the result topic
-  if (!this.omitResult) {
-    this.resultListener.subscribe(function(resultMessage) {
-      var goal = that.goals[resultMessage.status.goal_id.id];
+  this.resultListener.subscribe(function(resultMessage) {
+    var goal = that.goals[resultMessage.status.goal_id.id];
 
-      if (goal) {
+    if (goal) {
+      if (!this.omitResult) {
         goal.emit('status', resultMessage.status);
         goal.emit('result', resultMessage.result);
       }
-    });
-  }
+  
+      // remove the goal if it is completed
+      delete that.goals[goal.goalID];
+    }
+  });
 
   // If timeout specified, emit a 'timeout' event if the action server does not respond
   if (this.timeout) {
@@ -141,9 +152,9 @@ ActionClient.prototype.cancel = function() {
 ActionClient.prototype.dispose = function() {
   this.goalTopic.unadvertise();
   this.cancelTopic.unadvertise();
-  if (!this.omitStatus) {this.statusListener.unsubscribe();}
-  if (!this.omitFeedback) {this.feedbackListener.unsubscribe();}
-  if (!this.omitResult) {this.resultListener.unsubscribe();}
+  this.statusListener.unsubscribe();
+  this.feedbackListener.unsubscribe();
+  this.resultListener.unsubscribe();
 };
 
 module.exports = ActionClient;

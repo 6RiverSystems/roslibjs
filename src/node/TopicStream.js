@@ -49,4 +49,8 @@ Topic.prototype.toStream = function(options) {
     return stream;
 };
 
+Topic.prototype.attachSocket = function() {
+    throw new Error('attachSocket not implemented');
+};
+
 module.exports = Topic;

@@ -35,4 +35,8 @@ SocketIO.prototype.sendToRosbridge = function(msg){
     this.socket.send(msg);
 };
 
+SocketIO.prototype.attachSocket = function() {
+    throw new Error('attachSocket not implemented');
+};
+
 module.exports = SocketIO;
