@@ -405,14 +405,20 @@ export = ROSLIB;
          public serviceType: string;
  
          /**
+          * @callback callServiceCallback
+          *  @param {TResponse} response - The response from the service request.
+          */
+         /**
+          * @callback callServiceFailedCallback
+          * @param {string} error - The error message reported by ROS.
+          */
+         /**
           * Call the service. Returns the service response in the
           * callback. Does nothing if this service is currently advertised.
           *
           * @param {TServiceRequest} request - The ROSLIB.ServiceRequest to send.
-          * @param {function} callback - Function with the following params:
-          * @param {TServiceResponse} callback.response - The response from the service request.
-          * @param {function} [failedCallback] - The callback function when the service call failed with params:
-          * @param {string} failedCallback.error - The error message reported by ROS.
+          * @param {callServiceCallback} [callback] - Function with the following params:
+          * @param {callServiceFailedCallback} [failedCallback] - The callback function when the service call failed with params:
           */
          callService(
              request: TServiceRequest,
@@ -421,17 +427,19 @@ export = ROSLIB;
          ): void;
  
          /**
+          * @callback advertiseCallback
+          * @param {TRequest} request - The service request.
+          * @param {Partial<TResponse>} response - An empty dictionary. Take care not to overwrite this. Instead, only modify the values within.
+          * @returns {boolean} true if the service has finished successfully, i.e., without any fatal errors.
+          */
+         /**
           * Advertise the service. This turns the Service object from a client
           * into a server. The callback will be called with every request
           * that's made on this service.
           *
-          * @param {function} callback - This works similarly to the callback for a C++ service and should take the following params:
-          * @param {TServiceRequest} callback.request - The service request.
-          * @param {TServiceResponse} callback.response - An empty dictionary. Take care not to overwrite this. Instead, only modify the values within.
-          *     It should return true if the service has finished successfully,
-          *     i.e., without any fatal errors.
+          * @param {advertiseCallback} [callback] - This works similarly to the callback for a C++ service and should take the following params:
           */
-         advertise(callback: (request: TServiceRequest, response: TServiceResponse) => void): void;
+         advertise(callback: (request: TServiceRequest, response: Partial<TServiceResponse>) => boolean): void;
  
          /**
           * Unadvertise a previously advertised service.
